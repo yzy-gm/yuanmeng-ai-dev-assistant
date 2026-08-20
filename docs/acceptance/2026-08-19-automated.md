@@ -59,7 +59,14 @@ Task 17 的子进程大数据测试使用产品默认 Node 参数，并在建立
 - `npm run package:release`：PASS；同一路径 VSIX 18 文件、约 221.31 KB，SHA-256 `AE68AFC16365CD1C3F06727F823579476F7E9A0C483EA0620EB5583581BEF060`。
 - `node scripts/inspect-vsix.mjs outputs/yuanmeng-ai-dev-assistant-0.1.0.vsix --json`：PASS，`findings: []`；包内 author、description、256×256 PNG 与真实仓库 URL 已核对。
 - `npm audit --omit=dev --registry=https://registry.npmjs.org --json`：PASS，production vulnerabilities total = 0。
-- GitHub 目标仓库尚未创建/推送；本条不是 GitHub 或 Marketplace 发布通过证据。
+- GitHub 目标仓库已创建/推送；本条只记录本机候选包，不替代下方 GitHub 公开源码交付证据。
+
+#### GitHub 公开源码交付（2026-08-20）
+
+- 目标：`https://github.com/yzy-gm/yuanmeng-ai-dev-assistant`，API 返回 `private=false`、`visibility=public`。
+- 最终公开快照来自本机提交 `57f015e`，公开仓库唯一提交为 `85dc9f620dbd28674b24d48edd352385565264ae`；`git ls-remote` 与新鲜克隆 `HEAD` 完全一致。
+- 新鲜克隆再次运行 `node scripts/privacy-audit.mjs --repository <clone> --history --json` 与非最终 public preflight，均返回零 findings/`PUBLIC_RELEASE_PREFLIGHT_OK`。
+- 本机开发仓库仍无 `origin`；只有被忽略的公开快照目录连接 GitHub，未暴露本机开发历史。
 
 - `git status --short`：无输出，工作树干净；`outputs/` 中的 VSIX 按设计被忽略。
 - `npm ci --registry=https://registry.npmjs.org --no-audit --no-fund`：PASS，安装 457 个包，并生成 `node_modules/.bin/tsc.cmd`。显式使用官方 registry 是为了绕过上述本机镜像未生成 launcher 的环境问题；npm 同时给出依赖弃用与 allow-scripts 提示，但未阻止后续构建或测试。

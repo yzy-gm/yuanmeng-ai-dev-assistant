@@ -1390,7 +1390,7 @@ git commit -m "feat: prepare public marketplace release"
 
 Execution note (2026-08-20): commit `52a1f27` records the public identity, author-first metadata, no-op editor evidence and release preflight foundation. The subsequent corrective increment adds the not-yet-confirmed Publisher gate, real-URL final-release gate, PNG icon, LICENSE, third-party disclaimer, experimental editor-command labels, minimal VSIX, fixtures privacy enforcement and `yaml@2.9.0` import hardening. The 18-file candidate reran the complete Clean Profile lifecycle successfully; this still does not satisfy Publisher creation, GitHub URL, real property push or official build evidence.
 
-- [ ] **Step 10: Build and audit a clean public-source repository, then verify GitHub authorization**
+- [x] **Step 10: Build and audit a clean public-source repository, then verify GitHub authorization**
 
 The local development history is retained locally and is **not** pushed to the public repository. Before any GitHub operation, create an ignored disposable repository under `work/public-release-repository`, copy only the current Git-tracked files from the reviewed commit (excluding `.git`, ignored work/output data and generated VSIX files), initialize a new `main` branch, and make one public-source commit. This avoids exposing obsolete development-only evidence strings while preserving the local repository intact. Run privacy audit against both its working tree and its new single-commit history:
 
@@ -1406,7 +1406,7 @@ git -C $publicRoot log --oneline --decorate --all
 
 Expected: local reviewed commit is clean; the export contains only tracked current-source files, has exactly one root commit on `main`, and both its tree and history have zero privacy findings. The helper must refuse a destination outside `work`, a non-empty destination, a dirty source worktree, any tracked raw editor export/log/binary/secret, or any attempt to include the source `.git` directory.
 
-Execution note (2026-08-20): after corrective commit `6956001`, the helper produced `PUBLIC_EXPORT_READY` with 146 tracked files and one root commit `0bd5cd8`; after documentation commit `fab2c3d`, the final local target `work/public-release-repository-final` produced one root commit `02e5113`. Both export trees and histories returned zero privacy findings; no origin was added and no GitHub state was changed. Any later source/documentation or final URL change still requires regenerating the ignored export immediately before external push.
+Execution note (2026-08-20): after corrective commit `6956001`, the helper produced `PUBLIC_EXPORT_READY` with 146 tracked files and one root commit `0bd5cd8`; after documentation commit `fab2c3d`, the final local target `work/public-release-repository-final` produced one root commit `02e5113`. After URL metadata commit `57f015e`, `work/public-release-repository-57f015e` produced one root commit `85dc9f6`; tree/history privacy audit and non-final preflight returned zero findings. The target was verified as PUBLIC for `yzy-gm`, and the snapshot was pushed only after its empty origin was checked. The local development repository remained without a remote.
 
 Only after the clean export is verified, check authorization and query the target:
 
@@ -1423,7 +1423,7 @@ if ($LASTEXITCODE -eq 0 -and $expectedBeforeCreate -notcontains $origin) { throw
 
 Expected: authenticated account is known. If the repository exists, access is available and visibility is `PUBLIC`. If it does not exist, the repository query may report not found; that is the only case where creation proceeds. An absent origin in the clean export is allowed; an existing origin must already identify the intended account/repository or the workflow stops before creating or pushing anything. The local development repository's remotes are not modified.
 
-- [ ] **Step 11: Create or push the public repository**
+- [x] **Step 11: Create or push the public repository**
 
 If the public repository is absent, create it without adding or pushing a remote:
 
@@ -1450,7 +1450,9 @@ git -C $publicRoot push -u origin main
 
 The clone URL is obtained from `gh repo view`; it is never guessed. An existing origin is never overwritten or blindly re-added. Any origin not exactly equal to the target SSH URL or target HTTPS URL plus `.git` stops the workflow and is reported to the user. Expected: only the clean single-commit public export is pushed after identity and public visibility are confirmed; the local development history and its remotes remain private and unchanged.
 
-- [ ] **Step 12: Verify remote contents and release state**
+Execution note (2026-08-20): GitHub target `yzy-gm/yuanmeng-ai-dev-assistant` was verified `PUBLIC`; the clean snapshot `85dc9f6` was pushed to `main` after confirming it had no pre-existing remote. No remote was added to the local development repository.
+
+- [x] **Step 12: Verify remote contents and release state**
 
 Run:
 
@@ -1461,6 +1463,8 @@ gh repo view yuanmeng-ai-dev-assistant --json name,visibility,url
 ```
 
 Expected: the clean export is clean; remote `main` points at its single public-source commit; visibility is `PUBLIC`; a fresh clone passes the repository privacy audit and public release preflight. If authentication, permissions or push fails, record the exact blocker and state “GitHub 未上传”.
+
+Execution note (2026-08-20): `git ls-remote` returned `85dc9f620dbd28674b24d48edd352385565264ae`; a fresh clone matched that commit and passed working-tree/history privacy audit plus non-final public preflight.
 
 - [ ] **Step 13: Create/verify the Marketplace Publisher and publish the reviewed VSIX**
 
