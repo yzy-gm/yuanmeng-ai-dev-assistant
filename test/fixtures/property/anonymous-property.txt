@@ -1,0 +1,7 @@
+return {
+  title = "Anonymous",
+  count = 3,
+  enabled = true,
+  optional = nil,
+  nested = { mode = "safe" },
+}

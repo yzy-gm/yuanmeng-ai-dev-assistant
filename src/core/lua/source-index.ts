@@ -1,0 +1,572 @@
+import luaparse, {
+  type CallExpression,
+  type Chunk,
+  type Comment,
+  type Expression,
+  type FunctionDeclaration,
+  type Node,
+  type ReturnStatement,
+  type StringCallExpression,
+  type TableKeyString,
+  type TableCallExpression,
+} from 'luaparse';
+
+import { ProductError } from '../errors.js';
+import type { RegistryDocument, RegistryRecord } from '../model.js';
+import { decodeLuaStringLiteral } from './literal-parser.js';
+
+export type LuaSide = 'client' | 'server' | 'shared' | 'unknown';
+export type ReferenceConfidence = 'confirmed' | 'inferred' | 'candidate';
+export type WhereUsedKind = 'id' | 'signal' | 'ui';
+
+export interface LuaSourceFile {
+  path: string;
+  source: string;
+}
+
+export interface LuaApiCallKnowledge {
+  qualifiedName: string;
+  idParameterIndexes?: readonly number[];
+  signalParameterIndexes?: readonly number[];
+  side?: Exclude<LuaSide, 'unknown'>;
+}
+
+export interface LuaApiKnowledge {
+  calls: readonly LuaApiCallKnowledge[];
+  configuredIdFields: readonly string[];
+}
+
+export interface LuaSideEvidence {
+  value: LuaSide;
+  evidence: string | null;
+}
+
+export interface LuaSourceLocation {
+  path: string;
+  line: number;
+  column: number;
+  endLine: number;
+  endColumn: number;
+  context: string;
+}
+
+export interface LuaLiteralReference extends LuaSourceLocation {
+  value: string;
+}
+
+export interface LuaIdReference extends LuaLiteralReference {
+  kind: 'id' | 'ui';
+  confidence: ReferenceConfidence;
+  evidence:
+    | { source: 'registry'; recordId: string }
+    | { source: 'api'; qualifiedName: string; parameterIndex: number }
+    | { source: 'config'; field: string };
+}
+
+export interface LuaSignalReference extends LuaLiteralReference {
+  kind: 'signal';
+  role: 'send' | 'listen' | 'candidate';
+  confidence: ReferenceConfidence;
+  evidence:
+    | { source: 'registry'; recordId: string }
+    | { source: 'api'; qualifiedName: string; parameterIndex: number };
+}
+
+export interface LuaFunctionReference extends LuaSourceLocation {
+  name: string;
+  local: boolean;
+  parameters: string[];
+}
+
+export interface LuaCallReference extends LuaSourceLocation {
+  qualifiedName: string;
+  argumentCount: number;
+  arguments: LuaCallArgument[];
+  side: LuaSideEvidence;
+}
+
+export interface LuaCallArgument extends LuaSourceLocation {
+  literalType: 'string' | 'number' | 'boolean' | 'nil' | 'other';
+  value: string | number | boolean | null;
+}
+
+export interface LuaRequireReference extends LuaSourceLocation {
+  module: string;
+}
+
+export interface LuaReturnedModule extends LuaSourceLocation {
+  value: string;
+}
+
+export interface LuaConfigField extends LuaSourceLocation {
+  key: string;
+  value: string;
+}
+
+export interface LuaIndexedFile {
+  path: string;
+  side: LuaSideEvidence;
+}
+
+export interface LuaSourceIndex {
+  files: LuaIndexedFile[];
+  returnedModules: LuaReturnedModule[];
+  functions: LuaFunctionReference[];
+  calls: LuaCallReference[];
+  requires: LuaRequireReference[];
+  stringLiterals: LuaLiteralReference[];
+  numericLiterals: LuaLiteralReference[];
+  configFields: LuaConfigField[];
+  idReferences: LuaIdReference[];
+  signalReferences: LuaSignalReference[];
+}
+
+export type WhereUsedResult = LuaIdReference | LuaSignalReference;
+
+type RangedNode = Node & {
+  range?: [number, number];
+};
+
+type LuaCallExpression = CallExpression | StringCallExpression | TableCallExpression;
+
+interface FileContext {
+  path: string;
+  source: string;
+  lines: string[];
+  side: LuaSideEvidence;
+  registryByValue: ReadonlyMap<string, readonly RegistryRecord[]>;
+  apiByCall: ReadonlyMap<string, LuaApiCallKnowledge>;
+  configuredIdFields: ReadonlySet<string>;
+  index: LuaSourceIndex;
+  idReferences: Map<string, LuaIdReference>;
+  signalReferences: Map<string, LuaSignalReference>;
+}
+
+const MAX_FILE_BYTES = 16 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 64 * 1024 * 1024;
+const MAX_AST_NODES = 500_000;
+
+function fail(code: 'VALIDATION_FAILED' | 'INVALID_LUA_SYNTAX' | 'LUA_LIMIT_EXCEEDED', message: string, cause?: unknown): never {
+  throw new ProductError(code, message, ['修正 Lua 源文件或索引配置后重试。'], 'STATIC_LOCAL', cause);
+}
+
+function normalizePath(path: string): string {
+  const normalized = path.replace(/\\/gu, '/').replace(/^\.\//u, '');
+  if (
+    normalized === ''
+    || normalized.startsWith('/')
+    || /^[A-Za-z]:/u.test(normalized)
+    || normalized.split('/').includes('..')
+  ) {
+    fail('VALIDATION_FAILED', 'Lua 索引只接受工程内相对路径。');
+  }
+  return normalized;
+}
+
+function location(context: FileContext, node: RangedNode): LuaSourceLocation {
+  if (node.loc === undefined || node.range === undefined) {
+    fail('INVALID_LUA_SYNTAX', `Lua AST 缺少来源范围：${context.path}`);
+  }
+  const line = node.loc.start.line;
+  return {
+    path: context.path,
+    line,
+    column: node.loc.start.column + 1,
+    endLine: node.loc.end.line,
+    endColumn: node.loc.end.column + 1,
+    context: context.lines[line - 1]?.trim() ?? '',
+  };
+}
+
+function literalValue(node: Node): string | null {
+  if (node.type === 'StringLiteral') {
+    return decodeLuaStringLiteral(node.raw);
+  }
+  if (node.type === 'NumericLiteral' && Number.isSafeInteger(node.value)) {
+    return node.raw;
+  }
+  return null;
+}
+
+function expressionName(expression: Expression | null): string | null {
+  if (expression === null) {
+    return null;
+  }
+  if (expression.type === 'Identifier') {
+    return expression.name;
+  }
+  if (expression.type === 'MemberExpression') {
+    const base = expressionName(expression.base);
+    return base === null ? null : `${base}${expression.indexer}${expression.identifier.name}`;
+  }
+  if (expression.type === 'IndexExpression') {
+    const base = expressionName(expression.base);
+    const index = literalValue(expression.index);
+    return base === null || index === null ? null : `${base}[${JSON.stringify(index)}]`;
+  }
+  return null;
+}
+
+function functionName(node: FunctionDeclaration): string {
+  return expressionName(node.identifier) ?? '<anonymous>';
+}
+
+function sideFromComments(comments: readonly Comment[]): LuaSideEvidence {
+  for (const comment of comments) {
+    const match = /---@ymai-side\s+(client|server|shared)\b/u.exec(comment.raw);
+    if (match !== null) {
+      return {
+        value: match[1] as Exclude<LuaSide, 'unknown'>,
+        evidence: `annotation:${match[0]}`,
+      };
+    }
+  }
+  return { value: 'unknown', evidence: null };
+}
+
+function confidenceFor(record: RegistryRecord): ReferenceConfidence {
+  return record.validity === 'confirmed' ? 'confirmed' : 'candidate';
+}
+
+function referenceKey(path: string, node: RangedNode, value: string): string {
+  return `${path}\0${node.range?.[0] ?? -1}\0${value}`;
+}
+
+function addRegistryReference(context: FileContext, node: RangedNode, value: string): void {
+  const records = context.registryByValue.get(value) ?? [];
+  for (const record of records) {
+    if (record.kind === 'signal') {
+      addSignalReference(context, node, value, {
+        kind: 'signal',
+        role: 'candidate',
+        confidence: confidenceFor(record),
+        evidence: { source: 'registry', recordId: record.recordId },
+      });
+      continue;
+    }
+    addIdReference(context, node, value, {
+      kind: record.kind === 'ui-control' ? 'ui' : 'id',
+      confidence: confidenceFor(record),
+      evidence: { source: 'registry', recordId: record.recordId },
+    });
+  }
+}
+
+function addIdReference(
+  context: FileContext,
+  node: RangedNode,
+  value: string,
+  details: Pick<LuaIdReference, 'kind' | 'confidence' | 'evidence'>,
+): void {
+  const key = referenceKey(context.path, node, value);
+  const existing = context.idReferences.get(key);
+  if (existing?.confidence === 'confirmed' && details.confidence !== 'confirmed') {
+    return;
+  }
+  context.idReferences.set(key, { ...location(context, node), value, ...details });
+}
+
+function addSignalReference(
+  context: FileContext,
+  node: RangedNode,
+  value: string,
+  details: Pick<LuaSignalReference, 'kind' | 'role' | 'confidence' | 'evidence'>,
+): void {
+  const key = referenceKey(context.path, node, value);
+  const existing = context.signalReferences.get(key);
+  const keepRegistryEvidence = existing?.evidence.source === 'registry';
+  context.signalReferences.set(key, {
+    ...location(context, node),
+    value,
+    kind: 'signal',
+    role: details.role === 'candidate' && existing !== undefined ? existing.role : details.role,
+    confidence: keepRegistryEvidence ? existing.confidence : details.confidence,
+    evidence: keepRegistryEvidence ? existing.evidence : details.evidence,
+  });
+}
+
+function signalRole(qualifiedName: string): LuaSignalReference['role'] {
+  if (/(?:send|fire|emit)(?:signal|event)?$/iu.test(qualifiedName)) {
+    return 'send';
+  }
+  if (/(?:listen|subscribe|register|on)(?:signal|event)?$/iu.test(qualifiedName)) {
+    return 'listen';
+  }
+  return 'candidate';
+}
+
+function callArguments(call: LuaCallExpression): readonly Expression[] {
+  if (call.type === 'CallExpression') {
+    return call.arguments;
+  }
+  return [call.type === 'StringCallExpression' ? call.argument : call.arguments];
+}
+
+function callArgument(context: FileContext, argument: Expression): LuaCallArgument {
+  if (argument.type === 'StringLiteral') {
+    return { ...location(context, argument), literalType: 'string', value: decodeLuaStringLiteral(argument.raw) };
+  }
+  if (argument.type === 'NumericLiteral') {
+    return { ...location(context, argument), literalType: 'number', value: argument.value };
+  }
+  if (argument.type === 'BooleanLiteral') {
+    return { ...location(context, argument), literalType: 'boolean', value: argument.value };
+  }
+  if (argument.type === 'NilLiteral') {
+    return { ...location(context, argument), literalType: 'nil', value: null };
+  }
+  return { ...location(context, argument), literalType: 'other', value: null };
+}
+
+function processCall(context: FileContext, node: LuaCallExpression): void {
+  const qualifiedName = expressionName(node.base) ?? '<dynamic>';
+  const api = context.apiByCall.get(qualifiedName);
+  const args = callArguments(node);
+  const side = api?.side === undefined
+    ? context.side
+    : { value: api.side, evidence: `api:${qualifiedName}` } satisfies LuaSideEvidence;
+  context.index.calls.push({
+    ...location(context, node),
+    qualifiedName,
+    argumentCount: args.length,
+    arguments: args.map((argument) => callArgument(context, argument)),
+    side,
+  });
+  if (qualifiedName === 'require' && args[0]?.type === 'StringLiteral') {
+    context.index.requires.push({
+      ...location(context, args[0]),
+      module: decodeLuaStringLiteral(args[0].raw),
+    });
+  }
+  for (const parameterIndex of api?.idParameterIndexes ?? []) {
+    const argument = args[parameterIndex];
+    const value = argument === undefined ? null : literalValue(argument);
+    if (argument !== undefined && value !== null) {
+      addIdReference(context, argument, value, {
+        kind: 'id',
+        confidence: 'inferred',
+        evidence: { source: 'api', qualifiedName, parameterIndex },
+      });
+    }
+  }
+  for (const parameterIndex of api?.signalParameterIndexes ?? []) {
+    const argument = args[parameterIndex];
+    const value = argument === undefined ? null : literalValue(argument);
+    if (argument !== undefined && value !== null) {
+      addSignalReference(context, argument, value, {
+        kind: 'signal',
+        role: signalRole(qualifiedName),
+        confidence: 'inferred',
+        evidence: { source: 'api', qualifiedName, parameterIndex },
+      });
+    }
+  }
+}
+
+function processFunction(context: FileContext, node: FunctionDeclaration): void {
+  context.index.functions.push({
+    ...location(context, node),
+    name: functionName(node),
+    local: node.isLocal,
+    parameters: node.parameters.map((parameter) => (
+      parameter.type === 'Identifier' ? parameter.name : '...'
+    )),
+  });
+}
+
+function processReturn(context: FileContext, node: ReturnStatement): void {
+  for (const argument of node.arguments) {
+    const value = expressionName(argument)
+      ?? (argument.type === 'TableConstructorExpression' ? '<table>' : null);
+    if (value !== null) {
+      context.index.returnedModules.push({ ...location(context, argument), value });
+    }
+  }
+}
+
+function processConfigField(context: FileContext, node: TableKeyString): void {
+  const value = literalValue(node.value);
+  if (value === null) {
+    return;
+  }
+  context.index.configFields.push({ ...location(context, node.value), key: node.key.name, value });
+  if (context.configuredIdFields.has(node.key.name)) {
+    addIdReference(context, node.value, value, {
+      kind: 'id',
+      confidence: 'candidate',
+      evidence: { source: 'config', field: node.key.name },
+    });
+  }
+}
+
+function processLiteral(context: FileContext, node: Node): void {
+  if (node.type !== 'StringLiteral' && node.type !== 'NumericLiteral') {
+    return;
+  }
+  const value = literalValue(node);
+  if (value === null) {
+    return;
+  }
+  const reference = { ...location(context, node), value };
+  if (node.type === 'StringLiteral') {
+    context.index.stringLiterals.push(reference);
+  } else {
+    context.index.numericLiterals.push(reference);
+  }
+  addRegistryReference(context, node, value);
+}
+
+function visit(context: FileContext, node: Node, visited: Set<object>, count: { value: number }): void {
+  if (visited.has(node)) {
+    return;
+  }
+  visited.add(node);
+  count.value += 1;
+  if (count.value > MAX_AST_NODES) {
+    fail('LUA_LIMIT_EXCEEDED', 'Lua 源码 AST 节点数超过索引上限。');
+  }
+
+  processLiteral(context, node);
+  if (
+    node.type === 'CallExpression'
+    || node.type === 'StringCallExpression'
+    || node.type === 'TableCallExpression'
+  ) {
+    processCall(context, node);
+  } else if (node.type === 'FunctionDeclaration') {
+    processFunction(context, node);
+  } else if (node.type === 'ReturnStatement') {
+    processReturn(context, node);
+  } else if (node.type === 'TableKeyString') {
+    processConfigField(context, node);
+  }
+
+  for (const [key, value] of Object.entries(node as unknown as Record<string, unknown>)) {
+    if (key === 'loc' || key === 'range' || key === 'comments' || value === null || typeof value !== 'object') {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      for (const child of value) {
+        if (typeof child === 'object' && child !== null && 'type' in child) {
+          visit(context, child as Node, visited, count);
+        }
+      }
+    } else if ('type' in value) {
+      visit(context, value as Node, visited, count);
+    }
+  }
+}
+
+function parseFile(file: LuaSourceFile): { chunk: Chunk; path: string; side: LuaSideEvidence } {
+  const path = normalizePath(file.path);
+  if (Buffer.byteLength(file.source, 'utf8') > MAX_FILE_BYTES) {
+    fail('LUA_LIMIT_EXCEEDED', `Lua 文件超过索引大小上限：${path}`);
+  }
+  try {
+    const chunk = luaparse.parse(file.source, {
+      comments: true,
+      locations: true,
+      ranges: true,
+      luaVersion: '5.3',
+      encodingMode: 'none',
+    });
+    return { chunk, path, side: sideFromComments(chunk.comments ?? []) };
+  } catch (error) {
+    fail('INVALID_LUA_SYNTAX', `Lua 语法无效：${path}`, error);
+  }
+}
+
+function sortLocations<T extends LuaSourceLocation>(values: T[]): void {
+  values.sort((left, right) => (
+    left.path.localeCompare(right.path, 'en')
+    || left.line - right.line
+    || left.column - right.column
+  ));
+}
+
+export function buildLuaSourceIndex(
+  files: readonly LuaSourceFile[],
+  registry: RegistryDocument,
+  api: LuaApiKnowledge,
+): LuaSourceIndex {
+  const totalBytes = files.reduce((total, file) => total + Buffer.byteLength(file.source, 'utf8'), 0);
+  if (totalBytes > MAX_TOTAL_BYTES) {
+    fail('LUA_LIMIT_EXCEEDED', 'Lua 工程源码总大小超过索引上限。');
+  }
+  const registryByValue = new Map<string, RegistryRecord[]>();
+  for (const record of registry.records) {
+    const records = registryByValue.get(record.value) ?? [];
+    records.push(record);
+    registryByValue.set(record.value, records);
+  }
+  const apiByCall = new Map(api.calls.map((call) => [call.qualifiedName, call]));
+  const index: LuaSourceIndex = {
+    files: [],
+    returnedModules: [],
+    functions: [],
+    calls: [],
+    requires: [],
+    stringLiterals: [],
+    numericLiterals: [],
+    configFields: [],
+    idReferences: [],
+    signalReferences: [],
+  };
+  const idReferences = new Map<string, LuaIdReference>();
+  const signalReferences = new Map<string, LuaSignalReference>();
+  for (const file of files) {
+    const parsed = parseFile(file);
+    if (index.files.some((item) => item.path === parsed.path)) {
+      fail('VALIDATION_FAILED', `Lua 索引文件路径重复：${parsed.path}`);
+    }
+    index.files.push({ path: parsed.path, side: parsed.side });
+    const context: FileContext = {
+      path: parsed.path,
+      source: file.source,
+      lines: file.source.split(/\r?\n/u),
+      side: parsed.side,
+      registryByValue,
+      apiByCall,
+      configuredIdFields: new Set(api.configuredIdFields),
+      index,
+      idReferences,
+      signalReferences,
+    };
+    const count = { value: 0 };
+    for (const statement of parsed.chunk.body) {
+      visit(context, statement, new Set<object>(), count);
+    }
+  }
+  index.idReferences = [...idReferences.values()];
+  index.signalReferences = [...signalReferences.values()];
+  sortLocations(index.returnedModules);
+  sortLocations(index.functions);
+  sortLocations(index.calls);
+  sortLocations(index.requires);
+  sortLocations(index.stringLiterals);
+  sortLocations(index.numericLiterals);
+  sortLocations(index.configFields);
+  sortLocations(index.idReferences);
+  sortLocations(index.signalReferences);
+  index.files.sort((left, right) => left.path.localeCompare(right.path, 'en'));
+  return index;
+}
+
+export function whereUsed(
+  index: LuaSourceIndex,
+  query: string | { value: string; kind?: WhereUsedKind },
+): WhereUsedResult[] {
+  const value = typeof query === 'string' ? query : query.value;
+  const kind = typeof query === 'string' ? undefined : query.kind;
+  const ids = kind === 'signal'
+    ? []
+    : index.idReferences.filter((reference) => (
+      reference.value === value && (kind !== 'ui' || reference.kind === 'ui')
+    ));
+  const signals = kind === 'id' || kind === 'ui'
+    ? []
+    : index.signalReferences.filter((reference) => reference.value === value);
+  const results = [...ids, ...signals];
+  sortLocations(results);
+  return results;
+}

@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bujianxingguang.invalid/schemas/ui-snapshot.schema.json",
+  "title": "Yuanmeng AI Dev Assistant UI Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "snapshotId", "createdAt", "projectInstanceId", "mapFingerprint", "sources", "nodes", "duplicateNames"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "snapshotId": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "projectInstanceId": { "type": "string", "format": "uuid" },
+    "mapFingerprint": {
+      "anyOf": [
+        { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        { "type": "null" }
+      ]
+    },
+    "sources": { "type": "array", "items": { "$ref": "#/$defs/sourceEvidence" } },
+    "nodes": { "type": "array", "items": { "$ref": "#/$defs/uiNode" } },
+    "duplicateNames": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "paths"],
+        "properties": {
+          "name": { "type": "string" },
+          "paths": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sourceKind": {
+      "enum": ["official-export", "official-declaration", "user-entry", "source-scan", "imported-log"]
+    },
+    "evidenceLevel": {
+      "enum": ["STATIC_LOCAL", "UNIT_E2E", "EXTENSION_HOST", "OFFICIAL_EDITOR_SINGLE", "OFFICIAL_EDITOR_MULTI", "USER_ATTESTED"]
+    },
+    "uiSourceFile": {
+      "enum": ["src/Data/CustomUIData.lua", "src/Data/CustomUIData2.lua"]
+    },
+    "sourceEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "relativePath", "sha256", "observedAt", "officialExtensionVersion", "evidence"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/sourceKind" },
+        "relativePath": { "type": ["string", "null"] },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "officialExtensionVersion": { "type": ["string", "null"] },
+        "evidence": { "$ref": "#/$defs/evidenceLevel" }
+      }
+    },
+    "sourceRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startLine", "startColumn", "endLine", "endColumn"],
+      "properties": {
+        "startLine": { "type": "integer", "minimum": 1 },
+        "startColumn": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "endColumn": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "uiNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "name", "type", "parentId", "path", "depth", "siblingIndex", "sourceFile", "sourceRange"
+      ],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "parentId": { "type": ["string", "null"] },
+        "path": { "type": "string", "pattern": "^/" },
+        "depth": { "type": "integer", "minimum": 0 },
+        "siblingIndex": { "type": "integer", "minimum": 0 },
+        "sourceFile": { "$ref": "#/$defs/uiSourceFile" },
+        "sourceRange": {
+          "anyOf": [
+            { "$ref": "#/$defs/sourceRange" },
+            { "type": "null" }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+import { readFile } from 'node:fs/promises';
+const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
+if (packageJson.engines?.node !== '>=20') throw new Error('package engines.node must remain >=20');
+if (packageJson.bin?.ymai !== './out/cli.cjs') throw new Error('package bin.ymai contract changed');
+if (packageJson.publisher !== 'bujianxingguang') throw new Error('public publisher contract changed');
+if (packageJson.author !== '不见星光') throw new Error('public author contract changed');
+if (packageJson.license !== 'UNLICENSED') throw new Error('public source license contract changed');
+if (packageJson.icon !== 'media/yuanmeng-ai.png') throw new Error('Marketplace icon contract changed');
+if (packageJson.dependencies?.yaml !== '2.9.0') throw new Error('security-fixed yaml dependency contract changed');
+console.log('data contracts verified');

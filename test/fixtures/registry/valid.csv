@@ -1,0 +1,2 @@
+recordId,kind,name,value,scope,projectInstanceId,mapFingerprint,layerId,environment,validity,source,lastConfirmedAt,notes
+fixture-ui,ui-control,经验,41001,map,00000000-0000-4000-8000-000000000001,aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,,test,confirmed,"{""kind"":""user-entry"",""relativePath"":null,""sha256"":""cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"",""observedAt"":""2026-08-20T00:00:00.000Z"",""officialExtensionVersion"":null,""evidence"":""UNIT_E2E""}",2026-08-20T00:00:00.000Z,虚构夹具

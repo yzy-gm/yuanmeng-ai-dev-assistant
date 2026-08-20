@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bujianxingguang.invalid/schemas/status.schema.json",
+  "title": "Yuanmeng AI Dev Assistant Status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "project", "officialCommands", "link", "ui", "issueCounts"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "project": { "$ref": "#/$defs/projectIdentity" },
+    "officialCommands": {
+      "type": "object",
+      "additionalProperties": { "type": "boolean" }
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "reasonCode", "lastProbeAt"],
+      "properties": {
+        "state": { "$ref": "#/$defs/linkState" },
+        "reasonCode": { "type": "string" },
+        "lastProbeAt": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["freshness", "lastRefreshAt", "sourceHashes", "reasonCodes"],
+      "properties": {
+        "freshness": { "$ref": "#/$defs/freshness" },
+        "lastRefreshAt": { "type": ["string", "null"], "format": "date-time" },
+        "sourceHashes": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        },
+        "reasonCodes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "issueCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["error", "warning", "info"],
+      "properties": {
+        "error": { "type": "integer", "minimum": 0 },
+        "warning": { "type": "integer", "minimum": 0 },
+        "info": { "type": "integer", "minimum": 0 }
+      }
+    }
+  },
+  "$defs": {
+    "linkState": { "enum": ["unknown", "online", "offline"] },
+    "freshness": { "enum": ["missing", "fresh", "stale"] },
+    "nullableSha256": {
+      "anyOf": [
+        { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        { "type": "null" }
+      ]
+    },
+    "projectIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "projectInstanceId", "projectRootHash", "hasSrc", "hasGameEntry",
+        "mapFingerprint", "mapName", "currentLayerId", "layers"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "projectInstanceId": { "type": "string", "format": "uuid" },
+        "projectRootHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "hasSrc": { "type": "boolean" },
+        "hasGameEntry": { "type": "boolean" },
+        "mapFingerprint": { "$ref": "#/$defs/nullableSha256" },
+        "mapName": { "type": ["string", "null"] },
+        "currentLayerId": { "type": ["string", "null"] },
+        "layers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["layerId", "layerName"],
+            "properties": {
+              "layerId": { "type": "string" },
+              "layerName": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

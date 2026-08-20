@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bujianxingguang.invalid/schemas/registry.schema.json",
+  "title": "Yuanmeng AI Dev Assistant Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "records"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "records": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/registryRecord" }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "nullableSha256": {
+      "anyOf": [
+        { "$ref": "#/$defs/sha256" },
+        { "type": "null" }
+      ]
+    },
+    "registryKind": {
+      "enum": ["ui-control", "scene-instance", "element-type", "scene-layer", "signal", "camera", "other"]
+    },
+    "registryEnvironment": {
+      "enum": ["test", "formal", "unspecified"]
+    },
+    "registryValidity": {
+      "enum": ["pending", "confirmed", "invalid", "suspected-change"]
+    },
+    "registryScope": {
+      "enum": ["workspace", "map", "scene-layer"]
+    },
+    "sourceKind": {
+      "enum": ["official-export", "official-declaration", "user-entry", "source-scan", "imported-log"]
+    },
+    "evidenceLevel": {
+      "enum": ["STATIC_LOCAL", "UNIT_E2E", "EXTENSION_HOST", "OFFICIAL_EDITOR_SINGLE", "OFFICIAL_EDITOR_MULTI", "USER_ATTESTED"]
+    },
+    "sourceEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "relativePath", "sha256", "observedAt", "officialExtensionVersion", "evidence"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/sourceKind" },
+        "relativePath": {
+          "anyOf": [
+            { "type": "string", "minLength": 1, "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" },
+            { "type": "null" }
+          ]
+        },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "officialExtensionVersion": { "type": ["string", "null"] },
+        "evidence": { "$ref": "#/$defs/evidenceLevel" }
+      }
+    },
+    "registryRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recordId", "kind", "name", "value", "scope", "projectInstanceId", "mapFingerprint", "layerId",
+        "environment", "validity", "source", "lastConfirmedAt", "notes"
+      ],
+      "properties": {
+        "recordId": { "type": "string", "minLength": 1 },
+        "kind": { "$ref": "#/$defs/registryKind" },
+        "name": { "type": "string", "minLength": 1 },
+        "value": { "type": "string", "minLength": 1 },
+        "scope": { "$ref": "#/$defs/registryScope" },
+        "projectInstanceId": { "type": "string", "format": "uuid" },
+        "mapFingerprint": { "$ref": "#/$defs/nullableSha256" },
+        "layerId": { "type": ["string", "null"] },
+        "environment": { "$ref": "#/$defs/registryEnvironment" },
+        "validity": { "$ref": "#/$defs/registryValidity" },
+        "source": { "$ref": "#/$defs/sourceEvidence" },
+        "lastConfirmedAt": { "type": ["string", "null"], "format": "date-time" },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}

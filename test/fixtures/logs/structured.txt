@@ -1,0 +1,3 @@
+[2026-08-20T01:00:00.000Z] [INFO] [player=p1] [request=req-1] [signal=round.start] [stage=load] started
+[2026-08-20T01:00:01.000Z] [WARN] [request=req-1] [stage=load] no player label
+[2026-08-20T01:00:02.000Z] [ERROR] [player=p2] [signal=round.end] [stage=finish] failed

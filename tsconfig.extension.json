@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": [
+      "node16",
+      "vscode"
+    ]
+  },
+  "include": [
+    "src/core/**/*.ts",
+    "src/integrations/**/*.ts",
+    "src/extension/**/*.ts"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bujianxingguang.invalid/schemas/cli-launcher.schema.json",
+  "title": "Yuanmeng AI Dev Assistant CLI Launcher",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "extensionId", "extensionVersion", "extensionRootHash", "cliPath", "cliSha256",
+    "projectInstanceId", "projectRootHash", "generatedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "extensionId": { "const": "bujianxingguang.yuanmeng-ai-dev-assistant" },
+    "extensionVersion": { "type": "string", "minLength": 1 },
+    "extensionRootHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "cliPath": { "type": "string", "minLength": 1 },
+    "cliSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "projectInstanceId": { "type": "string", "format": "uuid" },
+    "projectRootHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "generatedAt": { "type": "string", "format": "date-time" }
+  }
+}

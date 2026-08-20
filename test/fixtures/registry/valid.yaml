@@ -1,0 +1,21 @@
+schemaVersion: 1
+records:
+  - recordId: fixture-ui
+    kind: ui-control
+    name: 经验
+    value: "41001"
+    scope: map
+    projectInstanceId: 00000000-0000-4000-8000-000000000001
+    mapFingerprint: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    layerId: null
+    environment: test
+    validity: confirmed
+    source:
+      kind: user-entry
+      relativePath: null
+      sha256: cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+      observedAt: 2026-08-20T00:00:00.000Z
+      officialExtensionVersion: null
+      evidence: UNIT_E2E
+    lastConfirmedAt: 2026-08-20T00:00:00.000Z
+    notes: 虚构夹具

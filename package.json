@@ -1,0 +1,286 @@
+{
+  "name": "yuanmeng-ai-dev-assistant",
+  "displayName": "元梦 AI 开发助手",
+  "description": "由不见星光开发，为《元梦之星》创作者提供本地 UI、ID、Lua 与 API 检查能力的 VS Code 伴随工具。",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "bujianxingguang",
+  "author": "不见星光",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yzy-gm/yuanmeng-ai-dev-assistant.git"
+  },
+  "homepage": "https://github.com/yzy-gm/yuanmeng-ai-dev-assistant#readme",
+  "bugs": {
+    "url": "https://github.com/yzy-gm/yuanmeng-ai-dev-assistant/issues"
+  },
+  "license": "UNLICENSED",
+  "pricing": "Free",
+  "icon": "media/yuanmeng-ai.png",
+  "keywords": [
+    "元梦之星",
+    "元梦",
+    "开发助手",
+    "Lua",
+    "UI",
+    "Yuanmeng",
+    "UGC",
+    "AI"
+  ],
+  "type": "module",
+  "main": "./out/extension.cjs",
+  "bin": {
+    "ymai": "./out/cli.cjs"
+  },
+  "engines": {
+    "vscode": "^1.70.0",
+    "node": ">=20"
+  },
+  "categories": [
+    "Linters",
+    "Other"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:yuanmengAi.refreshUi",
+    "onCommand:yuanmengAi.findUi",
+    "onCommand:yuanmengAi.openWizard",
+    "onCommand:yuanmengAi.copyCliCommand",
+    "onCommand:yuanmengAi.importRegistry",
+    "onCommand:yuanmengAi.previewPatch",
+    "onCommand:yuanmengAi.undoPatch",
+    "onCommand:yuanmengAi.buildScripts",
+    "onCommand:yuanmengAi.readProperty",
+    "onCommand:yuanmengAi.pushPropertyLiteral",
+    "onCommand:yuanmengAi.importLog",
+    "onView:yuanmengAi.environment",
+    "onView:yuanmengAi.ui",
+    "onView:yuanmengAi.registry",
+    "onView:yuanmengAi.search",
+    "onView:yuanmengAi.problems"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "yuanmengAi.refreshUi",
+        "title": "%command.refreshUi%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.findUi",
+        "title": "%command.findUi%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.openWizard",
+        "title": "%command.openWizard%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.copyCliCommand",
+        "title": "%command.copyCliCommand%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.copyUiId",
+        "title": "%command.copyUiId%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.copyUiPath",
+        "title": "%command.copyUiPath%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.copyLuaConstant",
+        "title": "%command.copyLuaConstant%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.importRegistry",
+        "title": "%command.importRegistry%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.previewPatch",
+        "title": "%command.previewPatch%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.undoPatch",
+        "title": "%command.undoPatch%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.buildScripts",
+        "title": "%command.buildScripts%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.readProperty",
+        "title": "%command.readProperty%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.pushPropertyLiteral",
+        "title": "%command.pushPropertyLiteral%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.importLog",
+        "title": "%command.importLog%",
+        "category": "%command.category%"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "yuanmengAi",
+          "title": "%views.container%",
+          "icon": "media/yuanmeng-ai.svg"
+        }
+      ]
+    },
+    "views": {
+      "yuanmengAi": [
+        {
+          "id": "yuanmengAi.environment",
+          "name": "%views.environment%"
+        },
+        {
+          "id": "yuanmengAi.ui",
+          "name": "%views.ui%"
+        },
+        {
+          "id": "yuanmengAi.registry",
+          "name": "%views.registry%"
+        },
+        {
+          "id": "yuanmengAi.search",
+          "name": "%views.search%"
+        },
+        {
+          "id": "yuanmengAi.problems",
+          "name": "%views.problems%"
+        }
+      ]
+    },
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "yuanmengAi.copyUiId",
+          "when": "viewItem == yuanmengUiNode",
+          "group": "inline@1"
+        },
+        {
+          "command": "yuanmengAi.copyUiPath",
+          "when": "viewItem == yuanmengUiNode",
+          "group": "navigation@2"
+        },
+        {
+          "command": "yuanmengAi.copyLuaConstant",
+          "when": "viewItem == yuanmengUiNode",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "%configuration.title%",
+      "properties": {
+        "yuanmengAi.staleAfterMinutes": {
+          "type": "number",
+          "default": 30,
+          "minimum": 1,
+          "description": "%configuration.staleAfterMinutes%"
+        },
+        "yuanmengAi.uiRefreshTimeoutSeconds": {
+          "type": "number",
+          "default": 15,
+          "minimum": 1,
+          "maximum": 300,
+          "description": "%configuration.uiRefreshTimeoutSeconds%"
+        },
+        "yuanmengAi.buildTimeoutSeconds": {
+          "type": "number",
+          "default": 60,
+          "minimum": 1,
+          "maximum": 600,
+          "description": "%configuration.buildTimeoutSeconds%"
+        },
+        "yuanmengAi.fileStableSampleMilliseconds": {
+          "type": "number",
+          "default": 150,
+          "minimum": 25,
+          "maximum": 5000,
+          "description": "%configuration.fileStableSampleMilliseconds%"
+        },
+        "yuanmengAi.fileStableSampleCount": {
+          "type": "integer",
+          "default": 3,
+          "minimum": 2,
+          "maximum": 20,
+          "description": "%configuration.fileStableSampleCount%"
+        },
+        "yuanmengAi.enableRequestQueue": {
+          "type": "boolean",
+          "default": true,
+          "description": "%configuration.enableRequestQueue%"
+        },
+        "yuanmengAi.enableInternalLogAdapter": {
+          "type": "boolean",
+          "default": false,
+          "description": "%configuration.enableInternalLogAdapter%"
+        },
+        "yuanmengAi.officialExtensionPath": {
+          "type": "string",
+          "default": "",
+          "description": "%configuration.officialExtensionPath%"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "pretypecheck": "node scripts/check-system-node.mjs",
+    "typecheck": "npm run typecheck:extension && npm run typecheck:cli",
+    "typecheck:extension": "tsc -p tsconfig.extension.json --noEmit",
+    "typecheck:cli": "tsc -p tsconfig.cli.json --noEmit",
+    "prelint": "node scripts/check-system-node.mjs",
+    "lint": "eslint src test scripts *.mjs --max-warnings 0",
+    "pretest:unit": "node scripts/check-system-node.mjs",
+    "test:unit": "vitest run --dir test/unit",
+    "pretest:integration": "node scripts/check-system-node.mjs",
+    "test:integration": "vitest run --dir test/integration --passWithNoTests",
+    "test:extension": "node scripts/run-extension-tests.mjs --version stable && node scripts/run-extension-tests.mjs --version stable --official-schema-gate --grep \"calibrated indexed projection\"",
+    "privacy-audit": "node scripts/privacy-audit.mjs --json",
+    "preflight:public-release": "node scripts/public-release-preflight.mjs --manifest package.json --json",
+    "inspect-vsix": "node scripts/inspect-vsix.mjs",
+    "build-upgrade-fixture": "node scripts/build-upgrade-fixture.mjs",
+    "prebuild": "node scripts/check-system-node.mjs",
+    "build": "node esbuild.mjs",
+    "generate:marketplace-icon": "node scripts/generate-marketplace-icon.mjs",
+    "verify": "npm run typecheck && npm run lint && npm run test:unit && npm run test:integration && npm run test:extension",
+    "package:vsix": "npm run privacy-audit && npm run generate:marketplace-icon && npm run build && vsce package --out outputs/yuanmeng-ai-dev-assistant-0.1.0.vsix && node scripts/inspect-vsix.mjs outputs/yuanmeng-ai-dev-assistant-0.1.0.vsix --json",
+    "package:release": "npm run privacy-audit && npm run generate:marketplace-icon && npm run build && vsce package --out outputs/yuanmeng-ai-dev-assistant-0.1.0.vsix && node scripts/inspect-vsix.mjs outputs/yuanmeng-ai-dev-assistant-0.1.0.vsix --json"
+  },
+  "dependencies": {
+    "luaparse": "0.3.1",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@types/luaparse": "0.2.13",
+    "@types/node": "20.19.17",
+    "@types/node16": "npm:@types/node@16.18.126",
+    "@types/vscode": "1.70.0",
+    "@vscode/test-electron": "2.5.2",
+    "@vscode/vsce": "3.6.2",
+    "esbuild": "0.25.10",
+    "eslint": "9.36.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.44.1",
+    "vite": "7.1.12",
+    "vitest": "4.0.0"
+  }
+}
