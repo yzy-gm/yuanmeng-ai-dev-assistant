@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/yuanmeng-ai/scene-source-binding.schema.json",
+  "title": "Private Scene Source Binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "bindingId", "projectInstanceId", "projectRootHash", "role", "sourcePath", "displayDirectory", "directoryHash", "createdAt"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "bindingId": { "$ref": "#/$defs/sha256" },
+    "projectInstanceId": { "type": "string", "minLength": 1 },
+    "projectRootHash": { "$ref": "#/$defs/sha256" },
+    "role": { "enum": ["manual-dat", "auto-dat", "raw-pbin"] },
+    "sourcePath": { "type": "string", "minLength": 1 },
+    "displayDirectory": { "type": "string", "minLength": 1 },
+    "directoryHash": { "$ref": "#/$defs/sha256" },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": { "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }
+}

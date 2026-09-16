@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/yuanmeng-ai/scene-heads.schema.json",
+  "title": "Private Scene Snapshot Heads",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "manualSnapshotId", "autoSnapshotId", "rawSnapshotId", "preferredSnapshotId"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "manualSnapshotId": { "$ref": "#/$defs/nullableSha256" },
+    "autoSnapshotId": { "$ref": "#/$defs/nullableSha256" },
+    "rawSnapshotId": { "$ref": "#/$defs/nullableSha256" },
+    "preferredSnapshotId": { "$ref": "#/$defs/nullableSha256" }
+  },
+  "$defs": {
+    "nullableSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" }
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/yuanmeng-ai/scene-snapshot.schema.json",
+  "title": "Private Normalized Scene Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "snapshotId", "bindingId", "role", "sourceSha256", "observedAt", "adapterId", "instances", "groups", "issues", "unknownFields"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "snapshotId": { "$ref": "#/$defs/sha256" },
+    "bindingId": { "type": "string", "minLength": 1 },
+    "role": { "enum": ["manual-dat", "auto-dat", "raw-pbin"] },
+    "sourceSha256": { "$ref": "#/$defs/sha256" },
+    "observedAt": { "type": "string", "format": "date-time", "minLength": 1, "maxLength": 128 },
+    "adapterId": { "type": "string", "minLength": 1 },
+    "instances": { "type": "array", "items": { "$ref": "#/$defs/instance" } },
+    "groups": { "type": "array", "items": { "$ref": "#/$defs/group" } },
+    "issues": { "type": "array", "items": { "$ref": "#/$defs/issue" } },
+    "unknownFields": { "type": "array", "items": { "$ref": "#/$defs/unknown" } },
+    "signalRegistry": { "$ref": "#/$defs/signalRegistryFeature" },
+    "sceneMetadata": { "$ref": "#/$defs/sceneMetadata" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "decimalId": { "type": "string", "pattern": "^[0-9]+$" },
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "source", "confidence"],
+      "properties": {
+        "state": { "enum": ["confirmed-calibration", "observed-repeatable", "inferred-candidate", "unknown"] },
+        "source": { "type": "string" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "vector": {
+      "type": "object", "additionalProperties": false, "required": ["x", "y", "z"],
+      "properties": { "x": { "type": "number" }, "y": { "type": "number" }, "z": { "type": "number" } }
+    },
+    "transform": {
+      "type": "object", "additionalProperties": false, "required": ["position", "rotation", "scale"],
+      "properties": { "position": { "$ref": "#/$defs/vector" }, "rotation": { "$ref": "#/$defs/vector" }, "scale": { "$ref": "#/$defs/vector" } }
+    },
+    "feature": {
+      "oneOf": [
+        { "type": "object", "required": ["state", "value", "evidence"], "properties": { "state": { "const": "observed" }, "value": {}, "evidence": { "$ref": "#/$defs/evidence" } }, "additionalProperties": false },
+        { "type": "object", "required": ["state", "wirePaths", "evidence"], "properties": { "state": { "const": "candidate" }, "wirePaths": { "type": "array", "items": { "type": "string" } }, "evidence": { "$ref": "#/$defs/evidence" } }, "additionalProperties": false },
+        { "type": "object", "required": ["state", "reason"], "properties": { "state": { "const": "unsupported" }, "reason": { "type": "string" } }, "additionalProperties": false },
+        { "type": "object", "required": ["state"], "properties": { "state": { "const": "absent" } }, "additionalProperties": false }
+      ]
+    },
+    "signalRecord": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "unknownRefCount"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "unknownRefCount": { "type": "integer", "minimum": 0 },
+        "ambiguous": { "type": "boolean" },
+        "unknownFields": { "type": "array", "items": { "$ref": "#/$defs/unknown" }, "maxItems": 256 }
+      }
+    },
+    "signalRegistryFeature": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["state", "value", "evidence"], "properties": { "state": { "const": "observed" }, "value": { "type": "array", "items": { "$ref": "#/$defs/signalRecord" }, "maxItems": 10000 }, "evidence": { "$ref": "#/$defs/evidence" } } },
+        { "type": "object", "additionalProperties": false, "required": ["state", "wirePaths", "evidence"], "properties": { "state": { "const": "candidate" }, "wirePaths": { "type": "array", "items": { "type": "string" } }, "evidence": { "$ref": "#/$defs/evidence" } } },
+        { "type": "object", "additionalProperties": false, "required": ["state", "reason"], "properties": { "state": { "const": "unsupported" }, "reason": { "type": "string" } } },
+        { "type": "object", "additionalProperties": false, "required": ["state"], "properties": { "state": { "const": "absent" } } }
+      ]
+    },
+    "metadataStringFeature": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["state", "value", "evidence"], "properties": { "state": { "const": "observed" }, "value": { "type": "string", "minLength": 1 }, "evidence": { "$ref": "#/$defs/evidence" } } },
+        { "type": "object", "additionalProperties": false, "required": ["state", "wirePaths", "evidence"], "properties": { "state": { "const": "candidate" }, "wirePaths": { "type": "array", "items": { "type": "string" } }, "evidence": { "$ref": "#/$defs/evidence" } } },
+        { "type": "object", "additionalProperties": false, "required": ["state", "reason"], "properties": { "state": { "const": "unsupported" }, "reason": { "type": "string" } } },
+        { "type": "object", "additionalProperties": false, "required": ["state"], "properties": { "state": { "const": "absent" } } }
+      ]
+    },
+    "instanceIndexValue": {
+      "type": "object", "additionalProperties": false,
+      "required": ["entryCount", "duplicateIds", "missingInstanceIds", "extraInstanceIds", "rawStatusValues"],
+      "properties": {
+        "entryCount": { "type": "integer", "minimum": 0 },
+        "duplicateIds": { "type": "array", "items": { "$ref": "#/$defs/decimalId" } },
+        "missingInstanceIds": { "type": "array", "items": { "$ref": "#/$defs/decimalId" } },
+        "extraInstanceIds": { "type": "array", "items": { "$ref": "#/$defs/decimalId" } },
+        "rawStatusValues": { "type": "array", "items": { "type": "string" } },
+        "unknownFields": { "type": "array", "items": { "$ref": "#/$defs/unknown" }, "maxItems": 256 }
+      }
+    },
+    "instanceIndexFeature": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["state", "value", "evidence"], "properties": { "state": { "const": "observed" }, "value": { "$ref": "#/$defs/instanceIndexValue" }, "evidence": { "$ref": "#/$defs/evidence" } } },
+        { "type": "object", "additionalProperties": false, "required": ["state", "wirePaths", "evidence"], "properties": { "state": { "const": "candidate" }, "wirePaths": { "type": "array", "items": { "type": "string" } }, "evidence": { "$ref": "#/$defs/evidence" } } },
+        { "type": "object", "additionalProperties": false, "required": ["state", "reason"], "properties": { "state": { "const": "unsupported" }, "reason": { "type": "string" } } },
+        { "type": "object", "additionalProperties": false, "required": ["state"], "properties": { "state": { "const": "absent" } } }
+      ]
+    },
+    "unknown": {
+      "type": "object", "additionalProperties": false, "required": ["path", "wireType", "length", "sha256"],
+      "properties": { "path": { "type": "string" }, "wireType": { "type": "integer" }, "length": { "type": "integer", "minimum": 0 }, "sha256": { "$ref": "#/$defs/sha256" } }
+    },
+    "instance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["instanceId", "elementTypeId", "ownerId", "variant", "evidence", "transform", "customProperties", "signals", "resources", "bounds", "unknownFields"],
+      "properties": {
+        "instanceId": { "$ref": "#/$defs/decimalId" },
+        "elementTypeId": { "anyOf": [{ "$ref": "#/$defs/decimalId" }, { "type": "null" }] },
+        "ownerId": { "anyOf": [{ "$ref": "#/$defs/decimalId" }, { "type": "null" }] },
+        "variant": { "enum": ["standard", "unsupported-oneof-1", "component6-oneof-11", "component6-oneof-1", "unknown"] },
+        "evidence": { "$ref": "#/$defs/evidence" },
+        "transform": { "$ref": "#/$defs/feature" },
+        "customProperties": { "$ref": "#/$defs/feature" },
+        "signals": { "$ref": "#/$defs/feature" },
+        "resources": { "$ref": "#/$defs/feature" },
+        "bounds": { "$ref": "#/$defs/feature" },
+        "unknownFields": { "type": "array", "items": { "$ref": "#/$defs/unknown" } }
+      }
+    },
+    "group": {
+      "type": "object", "additionalProperties": false, "required": ["groupId", "memberIds", "nestedGroupIds", "evidence"],
+      "properties": {
+        "groupId": { "$ref": "#/$defs/decimalId" },
+        "memberIds": { "type": "array", "items": { "$ref": "#/$defs/decimalId" } },
+        "nestedGroupIds": { "type": "array", "items": { "$ref": "#/$defs/decimalId" } },
+        "evidence": { "$ref": "#/$defs/evidence" },
+        "parentGroupId": { "anyOf": [{ "$ref": "#/$defs/decimalId" }, { "type": "null" }] },
+        "transform": { "$ref": "#/$defs/feature" },
+        "metadata": { "$ref": "#/$defs/feature" },
+        "unknownFields": { "type": "array", "items": { "$ref": "#/$defs/unknown" } }
+      }
+    },
+    "sceneMetadata": {
+      "type": "object", "additionalProperties": false,
+      "required": ["layerName", "editorVersionCandidate", "instanceIndex"],
+      "properties": {
+        "layerName": { "$ref": "#/$defs/metadataStringFeature" },
+        "editorVersionCandidate": { "$ref": "#/$defs/metadataStringFeature" },
+        "instanceIndex": { "$ref": "#/$defs/instanceIndexFeature" }
+      }
+    },
+    "issue": {
+      "type": "object", "additionalProperties": false, "required": ["code", "message", "instanceId"],
+      "properties": { "code": { "type": "string" }, "message": { "type": "string" }, "instanceId": { "type": ["string", "null"] } }
+    }
+  }
+}
