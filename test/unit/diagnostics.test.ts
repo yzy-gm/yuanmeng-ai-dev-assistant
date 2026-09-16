@@ -169,6 +169,97 @@ describe('project diagnostics', () => {
     expect(results).toContainEqual(expect.objectContaining({ code: 'API_LITERAL_TYPE', severity: 'error' }));
   });
 
+  it('accepts omission of trailing official varargs while still checking required arguments', () => {
+    const variadicApi: ApiIndex = {
+      schemaVersion: 2,
+      officialExtensionVersion: '1.4.7-test',
+      constants: [],
+      enums: [],
+      declarations: [
+        {
+          key: 'System:colon:RegisterEvent', module: 'System', name: 'RegisterEvent', callStyle: 'colon',
+          description: 'Register event.', signature: 'System:RegisterEvent(EventName, Callback, ...)',
+          params: [
+            { name: 'EventName', type: 'string', description: '' },
+            { name: 'Callback', type: 'function()', description: '' },
+            { name: '...', type: 'any', description: '可变参数' },
+          ],
+          returns: [], officialExtensionVersion: '1.4.7-test',
+          source: { relativePath: 'res/lib/System.d.lua', sha256: 'e'.repeat(64) },
+        },
+        {
+          key: 'TimerManager:colon:AddFrame', module: 'TimerManager', name: 'AddFrame', callStyle: 'colon',
+          description: 'Add frame timer.', signature: 'TimerManager:AddFrame(Delay, Callback, ...)',
+          params: [
+            { name: 'Delay', type: 'number', description: '' },
+            { name: 'Callback', type: 'function()', description: '' },
+            { name: '...', type: 'any', description: '可变参数' },
+          ],
+          returns: [], officialExtensionVersion: '1.4.7-test',
+          source: { relativePath: 'res/lib/TimerManager.d.lua', sha256: 'f'.repeat(64) },
+        },
+      ],
+    };
+    const sourceIndex = buildLuaSourceIndex([{
+      path: 'src/GameServer.lua',
+      source: [
+        'System:RegisterEvent(Events.ON_BEGIN_PLAY, function() end)',
+        'System:RegisterEvent(Events.ON_BEGIN_PLAY, function() end, "extra", 2)',
+        'TimerManager:AddFrame(5, function() end)',
+        'TimerManager:AddFrame(5)',
+      ].join('\n'),
+    }], { schemaVersion: 1, records: [] }, { calls: [], configuredIdFields: [] });
+
+    const results = analyzeProject({
+      sourceIndex,
+      registry: { schemaVersion: 1, records: [] },
+      apiIndex: variadicApi,
+      uiSnapshot: null,
+      status: null,
+      projectInstanceId,
+      mapFingerprint: null,
+    });
+
+    expect(results.filter((item) => item.code === 'API_ARGUMENT_COUNT')).toEqual([
+      expect.objectContaining({ message: expect.stringContaining('TimerManager:AddFrame'), severity: 'error' }),
+    ]);
+  });
+
+  it('accepts omitted trailing parameters marked optional by official metadata', () => {
+    const optionalApi: ApiIndex = {
+      schemaVersion: 2,
+      officialExtensionVersion: '1.4.7-test',
+      constants: [],
+      enums: [],
+      declarations: [{
+        key: 'System:colon:FireSignEvent', module: 'System', name: 'FireSignEvent', callStyle: 'colon',
+        description: 'Fire signal.', signature: 'System:FireSignEvent(EventName, PlayerIDs)',
+        params: [
+          { name: 'EventName', type: 'string', description: '' },
+          { name: 'PlayerIDs', type: 'number[]', description: '不传时只会在当前端触发', optional: true },
+        ],
+        returns: [], officialExtensionVersion: '1.4.7-test',
+        source: { relativePath: 'res/lib/System.d.lua', sha256: 'e'.repeat(64) },
+      }],
+    };
+    const sourceIndex = buildLuaSourceIndex([{
+      path: 'src/GameClient.lua',
+      source: 'System:FireSignEvent("收银指引")\n',
+    }], { schemaVersion: 1, records: [] }, { calls: [], configuredIdFields: [] });
+
+    const results = analyzeProject({
+      sourceIndex,
+      registry: { schemaVersion: 1, records: [] },
+      apiIndex: optionalApi,
+      uiSnapshot: null,
+      status: null,
+      projectInstanceId,
+      mapFingerprint: null,
+    });
+
+    expect(results.filter((item) => item.code === 'API_ARGUMENT_COUNT')).toEqual([]);
+  });
+
   it('reports duplicate UI data and stale evidence without treating arbitrary numbers as IDs', () => {
     const results = diagnostics();
     expect(results).toContainEqual(expect.objectContaining({ code: 'DUPLICATE_UI_NAME' }));
@@ -177,5 +268,32 @@ describe('project diagnostics', () => {
     expect(results.some((item) => item.message.includes('ordinaryNumber') || item.message.includes(' 3'))).toBe(false);
     expect(results.every((item) => item.runtimeVerified === false)).toBe(true);
     expect(results.filter((item) => item.path !== null).every((item) => item.range !== null)).toBe(true);
+  });
+
+  it('does not demand scene-registry records for player and resource ID domains', () => {
+    const sourceIndex = buildLuaSourceIndex([{
+      path: 'src/GameServer.lua',
+      source: 'TriggerBox:Contains(517)\nPlayer:Teleport(2001)\nProp:Use(3001)\n',
+    }], { schemaVersion: 1, records: [] }, {
+      calls: [
+        { qualifiedName: 'TriggerBox:Contains', idParameterDomains: [{ parameterIndex: 0, domain: 'scene-instance' }] },
+        { qualifiedName: 'Player:Teleport', idParameterDomains: [{ parameterIndex: 0, domain: 'player' }] },
+        { qualifiedName: 'Prop:Use', idParameterDomains: [{ parameterIndex: 0, domain: 'prop' }] },
+      ],
+      configuredIdFields: [],
+    });
+    const results = analyzeProject({
+      sourceIndex,
+      registry: { schemaVersion: 1, records: [] },
+      apiIndex: { ...api, declarations: [] },
+      uiSnapshot: null,
+      status: null,
+      projectInstanceId,
+      mapFingerprint: currentMap,
+    });
+
+    expect(results.filter((item) => item.code === 'UNREGISTERED_ID_REFERENCE')).toEqual([
+      expect.objectContaining({ message: expect.stringContaining('517') }),
+    ]);
   });
 });

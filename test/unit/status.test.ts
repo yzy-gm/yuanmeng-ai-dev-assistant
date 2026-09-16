@@ -125,6 +125,30 @@ describe('evidence-aware status reduction', () => {
     expect(status.ui.reasonCodes).toContain('NO_STABLE_NEW_EXPORT');
   });
 
+  it('uses explicit official output connection evidence without relaxing UI freshness gates', () => {
+    const status = reduceStatus({
+      ...freshInput,
+      refreshAttempt: {
+        ...freshInput.refreshAttempt!,
+        reasonCode: 'REFRESH_SUCCEEDED_UNCHANGED',
+        observedStableNewFiles: false,
+      },
+      officialConnection: {
+        state: 'online',
+        observedAt: '2026-08-19T00:29:00.000Z',
+        projectName: 'sample_map_alpha',
+        source: 'official-output-log',
+      },
+    });
+
+    expect(status.link).toMatchObject({
+      state: 'online',
+      reasonCode: 'OFFICIAL_OUTPUT_CONNECTED',
+      lastProbeAt: '2026-08-19T00:29:00.000Z',
+    });
+    expect(status.ui.freshness).toBe('fresh');
+  });
+
   it('marks a stable parsed refresh stale when its map fingerprint conflicts', () => {
     const status = reduceStatus({
       ...freshInput,

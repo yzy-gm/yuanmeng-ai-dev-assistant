@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { UiNode } from '../../src/core/model.js';
-import { buildUiSnapshot, findUi } from '../../src/core/ui/index.js';
+import { buildUiSnapshot, findUi, resolveUiByNameOrPath } from '../../src/core/ui/index.js';
 
 const baseNodes: UiNode[] = [
   {
@@ -68,6 +68,18 @@ describe('UI snapshot and search', () => {
     expect(findUi(value, 'HUD', { mode: 'path-contains' })).toMatchObject({ kind: 'ambiguous' });
     expect(findUi(value, 'jy', { mode: 'fuzzy' })).toMatchObject({ kind: 'not-found' });
     expect(findUi(value, '经', { mode: 'fuzzy' })).toMatchObject({ kind: 'unique', node: { id: '41002' } });
+  });
+
+  it('resolves decimal ID, full path, or exact name without fuzzy guessing', () => {
+    const duplicate = {
+      ...baseNodes[1]!, id: '41004', parentId: '41003', path: '/结算/经验', sourceFile: 'src/Data/CustomUIData2.lua' as const,
+    };
+    const value = snapshot([...baseNodes, duplicate]);
+
+    expect(resolveUiByNameOrPath(value, '41003')).toMatchObject({ kind: 'unique', node: { id: '41003' } });
+    expect(resolveUiByNameOrPath(value, '/HUD/经验')).toMatchObject({ kind: 'unique', node: { id: '41002' } });
+    expect(resolveUiByNameOrPath(value, '经验')).toMatchObject({ kind: 'ambiguous' });
+    expect(resolveUiByNameOrPath(value, '经')).toEqual({ kind: 'not-found' });
   });
 
   it('sorts nodes and records duplicate names deterministically', () => {
