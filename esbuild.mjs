@@ -27,5 +27,28 @@ await Promise.all([
     platform: 'node',
     sourcemap: false,
     target: 'node20'
+  }),
+  esbuild.build({
+    banner: { js: '#!/usr/bin/env node' },
+    entryPoints: ['src/mcp/main.ts'],
+    outfile: 'out/mcp.cjs',
+    bundle: true,
+    format: 'cjs',
+    legalComments: 'none',
+    minify: false,
+    platform: 'node',
+    sourcemap: false,
+    target: 'node20'
+  }),
+  esbuild.build({
+    entryPoints: ['src/core/scene/worker-entry.ts'],
+    outfile: 'out/scene-worker.cjs',
+    bundle: true,
+    format: 'cjs',
+    legalComments: 'none',
+    minify: false,
+    platform: 'node',
+    sourcemap: false,
+    target: 'node16.13'
   })
 ]);

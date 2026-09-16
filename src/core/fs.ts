@@ -24,18 +24,42 @@ export interface FileIO {
   mkdir(path: string, options: { recursive: true }): Promise<unknown>;
   open(path: string, flags: 'wx'): Promise<WritableFile>;
   readFile(path: string, encoding: 'utf8'): Promise<string>;
-  readBytes(path: string): Promise<Uint8Array>;
+  readBytes(path: string, maxBytes?: number): Promise<Uint8Array>;
   realpath(path: string): Promise<string>;
   rename(from: string, to: string): Promise<void>;
   stat(path: string): Promise<{ isDirectory(): boolean; isFile(): boolean; mtimeMs: number; size: number }>;
   unlink(path: string): Promise<void>;
 }
 
+export interface AtomicWriteOptions {
+  commitGuard?(): void;
+}
+
 export const nodeFileIO: FileIO = {
   mkdir: async (path, options) => mkdir(path, options),
   open: async (path, flags) => open(path, flags) as Promise<FileHandle>,
   readFile,
-  readBytes: async (path) => readFile(path),
+  readBytes: async (path, maxBytes) => {
+    if (maxBytes === undefined) return readFile(path);
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 0 || maxBytes >= Number.MAX_SAFE_INTEGER) {
+      throw new RangeError('maxBytes must be a non-negative safe integer.');
+    }
+    const handle = await open(path, 'r');
+    try {
+      const fileStat = await handle.stat();
+      const capacity = Math.min(maxBytes + 1, fileStat.size + 1);
+      const bytes = new Uint8Array(capacity);
+      let offset = 0;
+      while (offset < capacity) {
+        const result = await handle.read(bytes, offset, capacity - offset, offset);
+        if (result.bytesRead === 0) break;
+        offset += result.bytesRead;
+      }
+      return bytes.subarray(0, offset);
+    } finally {
+      await handle.close();
+    }
+  },
   realpath,
   rename,
   stat,
@@ -87,6 +111,7 @@ export async function atomicWriteJson<T>(
   target: string,
   value: T,
   validate: (value: unknown) => asserts value is T,
+  options: AtomicWriteOptions = {},
 ): Promise<void> {
   try {
     validate(value);
@@ -108,7 +133,9 @@ export async function atomicWriteJson<T>(
     await handle.sync();
     await handle.close();
     handle = undefined;
+    options.commitGuard?.();
     await renameWithRetry(io, temporaryPath, target);
+    options.commitGuard?.();
   } catch (error) {
     if (handle !== undefined) {
       try {
@@ -122,7 +149,7 @@ export async function atomicWriteJson<T>(
     } catch {
       // Preserve the write failure; privacy audits detect any orphaned temporary file.
     }
-    if (error instanceof ProductError) {
+    if (error instanceof ProductError || (error instanceof Error && error.name === 'AbortError')) {
       throw error;
     }
     throw new ProductError(

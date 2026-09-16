@@ -1,0 +1,1333 @@
+{
+  "version": "0.6.0",
+  "files": [
+    {
+      "path": ".gitignore",
+      "sha256": "69328cfda94993dc9d6c2863595287a5c4d7d6f9b109fa4d340be2e0cb821352"
+    },
+    {
+      "path": ".vscodeignore",
+      "sha256": "1da0f068a63a17ede6afa137a7077a8498a1b7cba9a5c3441c3180d68c311743"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "0aedb3ddc90e6d6a50f038a91115bd842cdf17dcd410de4f82225e65f1a34320"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "7df92239eebfd229ee144d96dbd196c9283e419884a07033c8d51c42042f2381"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "b12fd66bdba7ee166463fde6ec842c88afd0b61f95a81530de600829cd3e6225"
+    },
+    {
+      "path": "NOTICE.md",
+      "sha256": "db029d6ec87468244c4caa103496ed3eb5256ac1b74cdf2570e1cd2bf0215049"
+    },
+    {
+      "path": "README.md",
+      "sha256": "f6473e487be3b9405b59be1e863af99909be6519cbe4a34373ff3196248fce35"
+    },
+    {
+      "path": "RELEASE_NOTES.md",
+      "sha256": "976c2a2b58f0e2054a0d58d462891c0782d93393486705f7554b14a3304cdcbd"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "sha256": "076e64a4389c3b68a79d5f83ccb810f76c17a9cee583859c716b03ed9076a7c4"
+    },
+    {
+      "path": "docs/editor-acceptance-checklist.md",
+      "sha256": "4dd7f4499c445f828ea76221f3e8b6c9c9d1922441a3316d9fe09f85f505323b"
+    },
+    {
+      "path": "docs/mcp.md",
+      "sha256": "3c2856f17340838bad8d752b34a97192438180e22209fb5b63ffc9c6abe0654b"
+    },
+    {
+      "path": "docs/public-release.md",
+      "sha256": "3af26fc2846e12ba5a866d1e3d68ed11de3f1e1ae48b6a94c1f9af1d2d21a0fe"
+    },
+    {
+      "path": "esbuild.mjs",
+      "sha256": "8f613f8d13d2740306613384498381746c81075bdd0955373fc44e0cec8d3e86"
+    },
+    {
+      "path": "eslint.config.mjs",
+      "sha256": "f6aba5701f432c8aa565cb2a4374ba737214117fc59053d8161993e2c3f537ea"
+    },
+    {
+      "path": "media/yuanmeng-ai.png",
+      "sha256": "9c0ee3ec94201c269b282b994887dbee4e45b453cc5a585b1f0a3747c44c62e6"
+    },
+    {
+      "path": "media/yuanmeng-ai.svg",
+      "sha256": "fa0a32b7da05d20b3d70601bbc56126dd414c5f44c3af399b20647606f74c8c0"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "44c669fe075cf98110c5c0bd7803d5db153e20009df65fb1449fe60a8857e3f1"
+    },
+    {
+      "path": "package.json",
+      "sha256": "d6959b0fc5b59ae66604b76bb1af9f3b97f51fd3d4b0028d8f20c27b2561c729"
+    },
+    {
+      "path": "package.nls.en.json",
+      "sha256": "18664e9ab7e898fe21d618dcd9c066cfaae61bd38909e8ef1b374586b35e6d8a"
+    },
+    {
+      "path": "package.nls.json",
+      "sha256": "accec8ad7ddd476bf146b43c9584dd90d8764c5454da2b8943b3b1d5d787d28d"
+    },
+    {
+      "path": "schemas/cli-launcher.schema.json",
+      "sha256": "a6485ff1874246ccefb483b5f5e62567ceb232a8958419742bfcf1573d9cb17b"
+    },
+    {
+      "path": "schemas/registry.schema.json",
+      "sha256": "f6395d9713fe24517f85f13f66a995a658014c57f68fdee1a07cc6aded34109d"
+    },
+    {
+      "path": "schemas/scene-heads.schema.json",
+      "sha256": "907272f5deae6765db48f73dc59f3260b47bebb90bbd7a68b0fbb48209da11b3"
+    },
+    {
+      "path": "schemas/scene-snapshot.schema.json",
+      "sha256": "1281efc204123b67e0cb9a93f577c966ef0f277ad75f9674fb9d18bafe75f66f"
+    },
+    {
+      "path": "schemas/scene-source-binding.schema.json",
+      "sha256": "c8d3b6a8336cf64abbe256adf897f16ab8794df89f6ab8073a8dfa3bc9605cf2"
+    },
+    {
+      "path": "schemas/status.schema.json",
+      "sha256": "f40f221ba220100ef1ece232725c07887a4a00b83fa22fe7581c2932cfc0f163"
+    },
+    {
+      "path": "schemas/ui-snapshot.schema.json",
+      "sha256": "94ad0433d9be6759e6a1852d5e2d801c631e3f3b25cf7fec58f0a3f60f0452bf"
+    },
+    {
+      "path": "scripts/build-upgrade-fixture.mjs",
+      "sha256": "5b2573a77351db424e7f07f5732def55dd53652abc569ee05fc66fa6a1648548"
+    },
+    {
+      "path": "scripts/check-system-node.mjs",
+      "sha256": "9bf39c7e6898b6af7539e705150daf9ec03f7a12622a6548d18e1a8c88ad3ee2"
+    },
+    {
+      "path": "scripts/clean-profile-acceptance.ps1",
+      "sha256": "1a60396113577700eccd46858682708bf05640646b86f5da8262433e497ea95c"
+    },
+    {
+      "path": "scripts/create-private-source-baseline.mjs",
+      "sha256": "3a725e9b7f0a4d0341570261f763a70a97a4d65dbe5d3d82ed257acd5a18c537"
+    },
+    {
+      "path": "scripts/export-public-repository.mjs",
+      "sha256": "2154aaf225351ce0458fbaa5072b82316915af7d1fe98427898e7eb9995348cf"
+    },
+    {
+      "path": "scripts/generate-large-ui-fixture.mjs",
+      "sha256": "94b4848fb8a066fe0a1f0a7577349b2385ba1ecbcff5e9dac2734b072d95d4af"
+    },
+    {
+      "path": "scripts/generate-marketplace-icon.mjs",
+      "sha256": "c2e3f6c547086bbf2693c460ea1ece1711cc02924fe31fc94bd45b1bdd9e02ac"
+    },
+    {
+      "path": "scripts/inspect-vsix.mjs",
+      "sha256": "8267fdd74a7c067b58fde746446a911c92279803f95bc2e6123c3efd67a9157d"
+    },
+    {
+      "path": "scripts/large-ui-worker.ts",
+      "sha256": "400114f29e739ccfd56b31cf0056f76f3a4355ee3c7d6a780d53a81c1ba73b2c"
+    },
+    {
+      "path": "scripts/package-public-release.mjs",
+      "sha256": "3664eda61ffbeb9bc93e838464786b72233e1c08abbe2aa7a1226b2b26a15b0b"
+    },
+    {
+      "path": "scripts/prepare-private-output.mjs",
+      "sha256": "e60bd932db03cbfac25c755a5afffff4a4e707cbc95b07adaec163090f7b8cd2"
+    },
+    {
+      "path": "scripts/privacy-audit.mjs",
+      "sha256": "b24014e9453fe2943be9c9c3df5d5a9a2ab7bc8a23745388bdb8e3fe868fed1b"
+    },
+    {
+      "path": "scripts/private-release-policy.mjs",
+      "sha256": "6720857fa5697ba3c1b99f74864164b88f2fc8faed4c6b9a8ad2da829a2133f7"
+    },
+    {
+      "path": "scripts/public-release-files.mjs",
+      "sha256": "aca588aaadbfb4295bdffea4804e6e559678f6486384f33adcdd385926b3642a"
+    },
+    {
+      "path": "scripts/public-release-preflight.mjs",
+      "sha256": "cb5730080ffedfa653b67b499908c76c19af3f99225315428b448b3d9dea09f7"
+    },
+    {
+      "path": "scripts/refuse-public-publish.mjs",
+      "sha256": "dc4637340d5cd8cf50630389230075ca5e499911bb4e90d6bf7c14c25f84be80"
+    },
+    {
+      "path": "scripts/run-extension-tests.mjs",
+      "sha256": "e940cc2f95d358feac5b0a3cca4484d6963292971797f038f3688c355a8b985e"
+    },
+    {
+      "path": "scripts/verify-data-contracts.mjs",
+      "sha256": "11ed26dfac8fa726c1c2ded7c80b25b41ca7aa405781a803299b633e1696eb2d"
+    },
+    {
+      "path": "src/cli/args.ts",
+      "sha256": "c917af01a033e8fa101933b20b259e0a67c306f29917475198ee4d206d050a5c"
+    },
+    {
+      "path": "src/cli/gameplay.ts",
+      "sha256": "f9b433ee7249d1c7250a84c5fa15c9340f434e364827f0807c2cebed575af7c8"
+    },
+    {
+      "path": "src/cli/main.ts",
+      "sha256": "da42e0ef510fabdd8347b827974488b7169ae72f652714cc7af67f2f890add90"
+    },
+    {
+      "path": "src/cli/output.ts",
+      "sha256": "f1a4d0a7adbaaa6b182fda1baf58cd89ef07494b47ac0aa4d8d07633d729ba49"
+    },
+    {
+      "path": "src/cli/project.ts",
+      "sha256": "6c416effbb042324ce418bd6ebd0c41ed423e912acb4b4ec2a6cbba6c6f2ce5d"
+    },
+    {
+      "path": "src/cli/scene.ts",
+      "sha256": "ac7e2c3b639ad2d0c0aed496702e8fe27e9f40f3985dcfdc8dd073da9e6c1b74"
+    },
+    {
+      "path": "src/core/api/block-catalog.ts",
+      "sha256": "fa15fd76f0e1c33c36647941d13a97077675d95a07944d86bb18d2c692e9b126"
+    },
+    {
+      "path": "src/core/api/declaration-index.ts",
+      "sha256": "5a5eefad07f5cc5620576178216f1be386fdb38b32052d34b2ef0d1fe70cfe7f"
+    },
+    {
+      "path": "src/core/api/event-doc-index.ts",
+      "sha256": "38eeeef1cae8fc4ceae634f82431acf553e3588514c5b0ff07e54629ac7804e9"
+    },
+    {
+      "path": "src/core/api/lua-knowledge.ts",
+      "sha256": "660925f6cb3ecc271d8edfe9b4c111050d9b8ccf8dd62e3f6a4d3da87e48613d"
+    },
+    {
+      "path": "src/core/api/resource-catalog.ts",
+      "sha256": "0c2823c18dde283d85ca9571f5cab134a417f50e5e9cb23fa22764b2b3126139"
+    },
+    {
+      "path": "src/core/async/keyed-debouncer.ts",
+      "sha256": "4625cf6bdca74a19bb99ee3695aeaa1a448681ff7817e234b777afc3707d3984"
+    },
+    {
+      "path": "src/core/audit/report.ts",
+      "sha256": "a9b20bdf2de077fb0b97a7b55bce2958b40ea0a0d0e4eff283d74dab8e8ced27"
+    },
+    {
+      "path": "src/core/build/workflow.ts",
+      "sha256": "e31a59e46eeab9d10bb84ecbea06d93b987309502aae90984870846e75f0397c"
+    },
+    {
+      "path": "src/core/clock.ts",
+      "sha256": "93e7ba91ac5125a4fa8ff32acaf3271b7c5df3dc10effb2313cd32b8368168ff"
+    },
+    {
+      "path": "src/core/diagnostics/analyzer.ts",
+      "sha256": "13c936ccc12b556a1cd00ca96fb40447aa990338ad2e6fde6d350b655e36e941"
+    },
+    {
+      "path": "src/core/diagnostics/editor-policy.ts",
+      "sha256": "eda3fa7681319842c83771967ee05bdc68f77a03291c5713903f260910a654a8"
+    },
+    {
+      "path": "src/core/diagnostics/private-bundle.ts",
+      "sha256": "b381e9a77c973cd13af6326555f5766eadc0c209c15b2507a0570ab0ae68d8d9"
+    },
+    {
+      "path": "src/core/environment/health.ts",
+      "sha256": "207f96d365f4505c0063da770a3d248cc014c67b2e44f1bb609d7746e51836f3"
+    },
+    {
+      "path": "src/core/environment/official-sources.ts",
+      "sha256": "289f7fc863b7750eae6bb1c9fb80a9aa069893f83562f511d0694c5b7a25699a"
+    },
+    {
+      "path": "src/core/environment/source-paths.ts",
+      "sha256": "afae9b715cca799b314c3f8cf89391d269ec0104acd77d68f2c8f491c66e6537"
+    },
+    {
+      "path": "src/core/errors.ts",
+      "sha256": "cd5ace8180772a7e5406693afd81b2e58d4cf0e614d34d2f07c3bb140a10fff3"
+    },
+    {
+      "path": "src/core/feedback/store.ts",
+      "sha256": "64ac7222fdad5a3396b39a04563255bb485477ed8240270715919c9a47c67c69"
+    },
+    {
+      "path": "src/core/fs.ts",
+      "sha256": "16e4184719f4c232a237f6b75178ca7e8819db26edc55404620746a1d5339b96"
+    },
+    {
+      "path": "src/core/gameplay/assertions.ts",
+      "sha256": "c9016253b4cd394a306bd49a74ab99155bf864be310356f2239949ec4165fbcc"
+    },
+    {
+      "path": "src/core/gameplay/auto-prepare.ts",
+      "sha256": "d3fb64cab28cd6a998a4fe5d2592629e8f611479ff44a3ef993eaaae51ee12f2"
+    },
+    {
+      "path": "src/core/gameplay/display.ts",
+      "sha256": "a0ba85962f5f54958d5a9c30a2b3016af2686e13bfd28416a1b2d4791029884d"
+    },
+    {
+      "path": "src/core/gameplay/lua-facts.ts",
+      "sha256": "5ad2bba092186c2854741a3ab5ccc34c87c655f0378ff48487b3510dfa904cf1"
+    },
+    {
+      "path": "src/core/gameplay/model.ts",
+      "sha256": "7700798d2f74e7af8fc89887005be71bd5d86ac8ad6ca2b2218b2e8c103a38c2"
+    },
+    {
+      "path": "src/core/gameplay/production-scope.ts",
+      "sha256": "c4fe922565f12a9caa8a62ed6134d67d5878f49b63854893227f445d879ce0d7"
+    },
+    {
+      "path": "src/core/gameplay/replay.ts",
+      "sha256": "a358c13b6596ec576b6217d3d2800e864b7d9be9ebb0576e297b114ee1b3e13a"
+    },
+    {
+      "path": "src/core/gameplay/report.ts",
+      "sha256": "e9dff4594975e32e437b72c3d8535a043f5c34ca1fbaea1759b89037a1b2a4bb"
+    },
+    {
+      "path": "src/core/gameplay/run-store.ts",
+      "sha256": "3739c1e41b7bc7c37cd3734715acf1fad4193d592eda779d5fc2e155ab39668a"
+    },
+    {
+      "path": "src/core/gameplay/scenario-schema.ts",
+      "sha256": "2f8d69375c720cbb9fb9c3eff8604857ca65636ace86bdbd133db4b4c7f0e0c0"
+    },
+    {
+      "path": "src/core/gameplay/simulator.ts",
+      "sha256": "0704311f062506e5720d0a17a469f3889bbd0f5d74c24b80733a5b107b2d82b7"
+    },
+    {
+      "path": "src/core/gameplay/source-context.ts",
+      "sha256": "92fd67e414e547ec3545f71d108b9c9545aee3a25cfa05ab930f39c69fe4a2fa"
+    },
+    {
+      "path": "src/core/gameplay/types.ts",
+      "sha256": "72388cb075dd71d073a3b8199eef3f91234bc460d5f6cb760450acbc47d6463e"
+    },
+    {
+      "path": "src/core/gameplay/workflow.ts",
+      "sha256": "a14012fe7382bc920124aae6d55ebe86c6ea7bd26293d91562d5b15c62ed4fd8"
+    },
+    {
+      "path": "src/core/generation/templates.ts",
+      "sha256": "304f01f41016e53e6ce50e39af607fe2e8f7034f2e1a512714fb2de9ebd9cfdb"
+    },
+    {
+      "path": "src/core/hash.ts",
+      "sha256": "5f74489cbb2c1ee514cdc1a7551e3262ce7cac3fc44e32e97ca5b0e1500fab3d"
+    },
+    {
+      "path": "src/core/launcher/manifest.ts",
+      "sha256": "42a24a7df35ba4bc439a062a3269046f3e46cb86f8159e4d4280a69f8fefceb6"
+    },
+    {
+      "path": "src/core/logs/gameplay-trace.ts",
+      "sha256": "2eea758d25e7000499742c2b47995697998917baaca6d7e09c1aa3dbc18d4ae0"
+    },
+    {
+      "path": "src/core/logs/official-connection-files.ts",
+      "sha256": "1b4bb7a079b10451cf0bab44f1736f4edcb4850b603d7b5e6234890d0298869a"
+    },
+    {
+      "path": "src/core/logs/official-connection.ts",
+      "sha256": "49b72be63c54d654877913cebf99be4766a9c00a33a10f2fd1b280d06c577d51"
+    },
+    {
+      "path": "src/core/logs/parser.ts",
+      "sha256": "630a17fcc8df75e8d82a7fd8891c482b2f7fb4e9c1be3311db5f546e1f761a78"
+    },
+    {
+      "path": "src/core/lua/literal-parser.ts",
+      "sha256": "ee223a21e10aa5c2ba8c84efe2865cd40e96e3aac2716222da6ac5a215e4b24b"
+    },
+    {
+      "path": "src/core/lua/source-index.ts",
+      "sha256": "d591bcff2241df56d06a971338eb58c8c30267541458bcf6170098ce3fb01251"
+    },
+    {
+      "path": "src/core/model.ts",
+      "sha256": "adc8a1d6726eeb557b9a67da0f338c36f58f2de3bab45546861cacc25bf41362"
+    },
+    {
+      "path": "src/core/official/reverse-audit.ts",
+      "sha256": "75a6380e7bda465bc8ce4d3d7fb6848cd314cc0eb159a03d03528d054992c42a"
+    },
+    {
+      "path": "src/core/official/zip-reader.ts",
+      "sha256": "b2d2fed76039f2df54c69460c404b819f6810f3ee95405e264a7fc26012c46e7"
+    },
+    {
+      "path": "src/core/patch/proposal.ts",
+      "sha256": "3c2a1cdaa0c7d5d0d0c67d8857fb0d281c8ee88040aeaf2dc6d3967f91241073"
+    },
+    {
+      "path": "src/core/project/context.ts",
+      "sha256": "8e19bd52214a73d1d11eaefcf218a21351ebdd636ad6ed2051f4d15802e53e18"
+    },
+    {
+      "path": "src/core/project/display-profile.ts",
+      "sha256": "17d4493e3a9901889ade4f19129c47298316574c63b8e6f150652d087f4c12ed"
+    },
+    {
+      "path": "src/core/property/workflow.ts",
+      "sha256": "7779066b41bc1d329d531c113e56245f104113f22665d323415b089d784f7b21"
+    },
+    {
+      "path": "src/core/registry/store.ts",
+      "sha256": "8fc102e50eae16214ffda9ce294057534ffe586cf7a51f2098bf312a07338409"
+    },
+    {
+      "path": "src/core/scene/cache.ts",
+      "sha256": "9c9d630f0b421935d9f5ca342ffcf4a15d9f134847e93c7875f6fb858000fd0e"
+    },
+    {
+      "path": "src/core/scene/change-journal.ts",
+      "sha256": "cb7122eabfc702feb9a941eae96f31d55b8f25a3f9f29efaa3d154cdcc90967f"
+    },
+    {
+      "path": "src/core/scene/container.ts",
+      "sha256": "dc663e97a27baca774e05230160db0036c97cb3ec1176512b9e5c73c63d3cefb"
+    },
+    {
+      "path": "src/core/scene/diagnostics.ts",
+      "sha256": "1e7812d5b49558c35fb4ccabdad5a1860dfd2152ca0b73dbacaf06df30b8146a"
+    },
+    {
+      "path": "src/core/scene/diff.ts",
+      "sha256": "a380e5fce97158597b998e2460523c4f74b9ff70b4136dcd3a879d70a18e84b7"
+    },
+    {
+      "path": "src/core/scene/export.ts",
+      "sha256": "c3b08f814b7fd2bad64ad921d9c35219d45b717ea15166362aafb5a5857c2ade"
+    },
+    {
+      "path": "src/core/scene/geometry.ts",
+      "sha256": "4171d16a64ed0790bea24d3fd813e6c4971b76ea2858738ccfe9e2944284ac1a"
+    },
+    {
+      "path": "src/core/scene/hierarchy.ts",
+      "sha256": "2ae66061926c213819d9e00b666c4ed3502c9cdc3184252d7e3b57a8345ecc6a"
+    },
+    {
+      "path": "src/core/scene/index.ts",
+      "sha256": "6c6089813245f569c79988282c97ba64175831f8c76409a2640bb67be1ccdc77"
+    },
+    {
+      "path": "src/core/scene/lua-probe.ts",
+      "sha256": "585f75e1faa6c0632837b53554445478fb71d12122835e8f3b8bbc1bd4a8e850"
+    },
+    {
+      "path": "src/core/scene/normalize.ts",
+      "sha256": "a239d0f9266a206794730129bb2c84744caeed4dcd9c0b404ec9cf49907c5f5f"
+    },
+    {
+      "path": "src/core/scene/placement-plan.ts",
+      "sha256": "b822c533163ebf18bc8ad75d11334df06bc689e9eac9c8a22601030c9cc0c408"
+    },
+    {
+      "path": "src/core/scene/probe-evidence.ts",
+      "sha256": "55b8ced63e157adab4a502c1e1de8efc0ed0a9e67bb607ed7080a1214a429e7e"
+    },
+    {
+      "path": "src/core/scene/rebind.ts",
+      "sha256": "214c54806fdc8af9c39b45071bd421f25dc4d7660e31435febf55759d0890ced"
+    },
+    {
+      "path": "src/core/scene/semantic-catalog.ts",
+      "sha256": "282c9ad9c967bd612bc1724bc33b21dbb3bb1f2c15aef190dd24b86d1546ddf1"
+    },
+    {
+      "path": "src/core/scene/spatial.ts",
+      "sha256": "7b6e1c392ba7afe5e6bd988b3ba4f618f698f5d99fa759f98ac97eecd4c54255"
+    },
+    {
+      "path": "src/core/scene/store.ts",
+      "sha256": "30e7dccdbba57c83bebbe601192c57a6bcccdc77d6040597bce62169c871ccc2"
+    },
+    {
+      "path": "src/core/scene/types.ts",
+      "sha256": "2b3d98ea0945cfa36738c59a91dce6b016e9c1fb657feb849c51a87c43bf82fe"
+    },
+    {
+      "path": "src/core/scene/wire.ts",
+      "sha256": "0f35d5b79d8c3cab8e1073220c5a92a7085e08ac07a25620071e4c21114b4795"
+    },
+    {
+      "path": "src/core/scene/worker-client.ts",
+      "sha256": "e7b0aff89260fdec81cc6a1d11e323655c1284d063c5ad06754cd56e57b3910e"
+    },
+    {
+      "path": "src/core/scene/worker-entry.ts",
+      "sha256": "a2b8e691ebf3f50e36d504870958f2bbc45b3337171fadf7c01f484a2ead8fe7"
+    },
+    {
+      "path": "src/core/scene/worker-protocol.ts",
+      "sha256": "1343bfff61feb1b0f1bc360f7e352bcc75d8767f5c688c2b45a515d1e40b6d86"
+    },
+    {
+      "path": "src/core/scene/workflow.ts",
+      "sha256": "de35f7874b183d254db90fd942f8dcedd0f5b56266a1211f55a31d338bd400cc"
+    },
+    {
+      "path": "src/core/status/bridge-heartbeat.ts",
+      "sha256": "f1eebda5afa80a810255d3932d99c07cb967d240323b24719060bd36f4a4d715"
+    },
+    {
+      "path": "src/core/status/display.ts",
+      "sha256": "68a07d12e7b0d6e6e56d053e0a0cb50cc6087fb3334f0963ce84ed38dd51ee85"
+    },
+    {
+      "path": "src/core/status/live-connection.ts",
+      "sha256": "ec4cb8f32d4fe02f8b7ab1f8f7c7b7666ebc92802c06a199121b41aa365ccf2c"
+    },
+    {
+      "path": "src/core/status/status.ts",
+      "sha256": "b6578fe97f5093d8321ed13d96ccc34bd86120721930f994a7610577c3d22c24"
+    },
+    {
+      "path": "src/core/ui/adapter.ts",
+      "sha256": "79ffcd97bb3c18a479b1b1ee8320c0a87e0f5ea53df98201e3b7786cccf39e00"
+    },
+    {
+      "path": "src/core/ui/diff.ts",
+      "sha256": "a183156c6b9c0aa16dbf2f2ce7782006a1b8c6468a30e6eaa35ec16e610951e1"
+    },
+    {
+      "path": "src/core/ui/export.ts",
+      "sha256": "0038e96e7abbaa8dd7974f9f682de94b2b9707004703a13ec97fe8f68e830150"
+    },
+    {
+      "path": "src/core/ui/index.ts",
+      "sha256": "6976d75133f4bac34eb08e877c58e9bdc05c6a14bca0b78d964b3ca77b96dcfd"
+    },
+    {
+      "path": "src/core/ui/layer-order-guard.ts",
+      "sha256": "725b0645bff8b04df578ad5f74725b77272eeb2e6892ad7e837d6d80f27f1fc3"
+    },
+    {
+      "path": "src/core/ui/runtime-geometry.ts",
+      "sha256": "7da1dc01dca2e5e1fd11ab38944bed23575619f1298e00cf7bc39c896d0e6410"
+    },
+    {
+      "path": "src/core/ui/runtime-inspection.ts",
+      "sha256": "ed44b421c80874dbba9579da6c65c211fb57b475d79e2c633d0ac1fc32eb7e52"
+    },
+    {
+      "path": "src/extension/cli-launcher.ts",
+      "sha256": "5e83ae5cd7ffdc5dfb00ceaab6cb11af013bc6d9d251c357a1f3830b0d0a28bc"
+    },
+    {
+      "path": "src/extension/code-delivery-bridge.ts",
+      "sha256": "cfe8c2fc8534cbbffde33fad708a494cb2279a966665906fff9a1508ebd249bc"
+    },
+    {
+      "path": "src/extension/code-delivery.ts",
+      "sha256": "27bb8161d2d07ed968bbf9cfaadbb4ba0b6222b848aac3b91df16ad61af5dfc3"
+    },
+    {
+      "path": "src/extension/codex-mcp-commands.ts",
+      "sha256": "2806d19e2a9671d252c1afd783222271ca5a34574baf9be02192ccc1dda20927"
+    },
+    {
+      "path": "src/extension/codex-mcp-registration.ts",
+      "sha256": "f784fac97db99bed8724e9e4e041dad71138f6ffda385c5fe028ba161d67643d"
+    },
+    {
+      "path": "src/extension/commands.ts",
+      "sha256": "6a2c0788bff2d38c45a7866c6d5484b4a6591c78560c2121ce79094e96ec34dc"
+    },
+    {
+      "path": "src/extension/extension.ts",
+      "sha256": "d71adb84f676cac7212d7b0c18fe77dfbd986bc3f5b7961597dc974f7cd745b9"
+    },
+    {
+      "path": "src/extension/gameplay-commands.ts",
+      "sha256": "cb5078b383cbebb1e55165a81959ec17cab589e050491a1c7d72fda513fbf455"
+    },
+    {
+      "path": "src/extension/gameplay-views.ts",
+      "sha256": "51d5d695f3381d765a07d5ff6e594b09c635fbbdab4bccee83f95ed23599c325"
+    },
+    {
+      "path": "src/extension/language-features.ts",
+      "sha256": "914fcc4467ea0f7c0d6e54d55861a04915379059ac17b4b47319c8b07d1fa42c"
+    },
+    {
+      "path": "src/extension/mcp-definitions.ts",
+      "sha256": "b5725e72ed64bb4a1b1764e528d3ff01104c6d95f0ee4a0811478c5af9e17ea3"
+    },
+    {
+      "path": "src/extension/mcp-provider.ts",
+      "sha256": "10406227d4c1584d5577cae6a34d6d94ac24816cb5a96553f3ae186da56847bb"
+    },
+    {
+      "path": "src/extension/official-connection-monitor.ts",
+      "sha256": "59882ae44872ab536f310ef0b1f782fa20566b45e335ec1f821aed8792eef1d2"
+    },
+    {
+      "path": "src/extension/private-tools-commands.ts",
+      "sha256": "df3a20054e9ff4fee65ae3e894fde7ff81aa0c74e865b0aaed8d39ec29d72e6e"
+    },
+    {
+      "path": "src/extension/queue-host.ts",
+      "sha256": "816b3ec6930dfeba63248d8dd1f8191aa5bd4049d36f5b7108b667d8a276272c"
+    },
+    {
+      "path": "src/extension/release-notice.ts",
+      "sha256": "904c00cc67e43ba6545ecb47b7209646528096bb3bf74f9fd242b396b53c149d"
+    },
+    {
+      "path": "src/extension/scene-commands.ts",
+      "sha256": "3466b0928d07ab79570c4245b81e3efe8952bff42775b66732de3a8557a1bf8d"
+    },
+    {
+      "path": "src/extension/scene-controller.ts",
+      "sha256": "9652e9e6f643d9c551471f4b761fd3e6a92ef1659ec09f62e637c90cff631d39"
+    },
+    {
+      "path": "src/extension/scene-inspection-views.ts",
+      "sha256": "7769c960f1799f460d98933304e8340d88fa746b11b5552e0b711b38ce0a2077"
+    },
+    {
+      "path": "src/extension/scene-views.ts",
+      "sha256": "71baf9b555bcf47ccd22b0c3aaad040838c9b6f220c9cf8664f67d050c2632eb"
+    },
+    {
+      "path": "src/extension/scene-workflow-views.ts",
+      "sha256": "1c14f6829721c8631d78c23c3f0111fed4e1d0967b170196fb7e47dd27442991"
+    },
+    {
+      "path": "src/extension/status-bar.ts",
+      "sha256": "18c69cb40c2a7b026d6d4db6cfe8ff40c435dc5f2be84a456940ff1da16be577"
+    },
+    {
+      "path": "src/extension/views.ts",
+      "sha256": "03cdeb08453cc8b09275d55e4464db6ea942b7787a83b73d051ddad476af5e13"
+    },
+    {
+      "path": "src/extension/virtual-documents.ts",
+      "sha256": "73ea4c8e87c1110a631b98ccf13321649ab5a08a9b3967f76d892241992baea1"
+    },
+    {
+      "path": "src/extension/wizard.ts",
+      "sha256": "d834ab40ab73928427f0d0f6cd13f989c98732d45b0de2bc007370f3e8af9767"
+    },
+    {
+      "path": "src/extension/workspaces.ts",
+      "sha256": "279831903a654acee991a9a75bd9c556e9b78149ae76b57a68f87e655b1bfb91"
+    },
+    {
+      "path": "src/integrations/audit/project-audit.ts",
+      "sha256": "6e8556ffd55a1e63e96a8b2403b3b19b9f8157a9eb7679107e7628c652160aff"
+    },
+    {
+      "path": "src/integrations/official/api-index-loader.ts",
+      "sha256": "e3def32791ec630060e300ef82385311cee58b2bcce65d5163b2d96e46293dbc"
+    },
+    {
+      "path": "src/integrations/official/api-source.ts",
+      "sha256": "032b9e755a095358f5d42e430ab708c7d1cc843f3de64a1cf49644f7edaecda1"
+    },
+    {
+      "path": "src/integrations/official/commands.ts",
+      "sha256": "c913b0cb1ba751518d5276f6cbab7166f30efbf35f58ba583b11b42aba027052"
+    },
+    {
+      "path": "src/integrations/official/event-doc-source.ts",
+      "sha256": "5958260e982a781237cc2204e5f74947bacac750fd40ff4eb3252c86ddff4919"
+    },
+    {
+      "path": "src/integrations/official/files.ts",
+      "sha256": "3476170cc07aafd0ad678d90591ef41475596075a28b0a8c5161702a7ac934f0"
+    },
+    {
+      "path": "src/integrations/official/provider.ts",
+      "sha256": "fc0e65a74278d85fb3c559f8125574786046f5eb642fc3e7c3af82351fdf8f30"
+    },
+    {
+      "path": "src/integrations/official/resource-doc-source.ts",
+      "sha256": "a7896567f34869e4abfaab9753d2877807e303910cf3351be44097e8ef0b522b"
+    },
+    {
+      "path": "src/integrations/queue/protocol.ts",
+      "sha256": "4a70c6a1a97d67daa1c44aa96b22c7d2d866ee37b1ebef747faa2a734dbded5b"
+    },
+    {
+      "path": "src/integrations/scene/source.ts",
+      "sha256": "b42d06b1e040673f2c6d8b8009dfb582a3ca58a20faf017a4673ee3ed5c218f7"
+    },
+    {
+      "path": "src/integrations/ui/watcher.ts",
+      "sha256": "e68fca97bd87729b5d26fce94518c26c48b0b848896869a8e0e775ed5ae4534c"
+    },
+    {
+      "path": "src/mcp/code-delivery.ts",
+      "sha256": "882241679bb19bf9b7c59c385033e975c18d0aa27f410c281eb6aea27fd0ecfe"
+    },
+    {
+      "path": "src/mcp/contracts.ts",
+      "sha256": "ceecc042b80fddaf7a1a0ec15c591b1b72b7f18c6d92c30c969f7612d7d52552"
+    },
+    {
+      "path": "src/mcp/gateway.ts",
+      "sha256": "4b558110d369e1a4d99143c484fea47f904dfd427a50149671709f673b2f35d6"
+    },
+    {
+      "path": "src/mcp/main.ts",
+      "sha256": "71e48eb413e22c7b64b4d394926debb6d9186fb00753d16b9ad635a8e5718b00"
+    },
+    {
+      "path": "src/mcp/pagination.ts",
+      "sha256": "a1069e15329d04a2464d3fa10f438393bb1d9c49e6532146ebff54ad4caa2380"
+    },
+    {
+      "path": "src/mcp/presentation.ts",
+      "sha256": "f48e860fc56407ded5308f98c406d9b6c32f2bcf8dce06ead1c68c3fe933a9fb"
+    },
+    {
+      "path": "src/mcp/prompts.ts",
+      "sha256": "4b8583668cccb6f59d26e7cf81468eb83c2876b14a8a05e89d661c56472425e6"
+    },
+    {
+      "path": "src/mcp/resources.ts",
+      "sha256": "d2c6c3809ad97a5e1291e4d7597b6e76ae821683c11fe0e2c77f2083bbfb173b"
+    },
+    {
+      "path": "src/mcp/server.ts",
+      "sha256": "2f7f331436be20810762e5e14cdaa33cf4bd585daf7de0338b15a2f5198af93e"
+    },
+    {
+      "path": "src/mcp/tool-schemas.ts",
+      "sha256": "62a323a40804ffc93ba1be86a4886c1a295a158f29b3383cbcb6ce4df58def9c"
+    },
+    {
+      "path": "test/extension/build-command.test.ts",
+      "sha256": "160751ace4d7e136fc040a202d3b97d6d4b8f26b4228da445d249c3472d9ed9f"
+    },
+    {
+      "path": "test/extension/cli-launcher.test.ts",
+      "sha256": "3874d6449647c9a2ca5b5563417cd23f93403f7bcf4db741d37e7c9e11c97137"
+    },
+    {
+      "path": "test/extension/gameplay-view.test.ts",
+      "sha256": "f96fb008f36869db33105fdb705bb1480bb280fe83af76f55bfc4f3b7b8bac70"
+    },
+    {
+      "path": "test/extension/gameplay.test.ts",
+      "sha256": "8c4066e6b46b031c54931479f747091e50ad57628aa8d5181512b2c9b860d7f8"
+    },
+    {
+      "path": "test/extension/host-noise-probe.test.ts",
+      "sha256": "33a66a8d1227afe9e457ffc9d27bb7485838ef6f0d3b287a5d4e79d94cc52051"
+    },
+    {
+      "path": "test/extension/index.ts",
+      "sha256": "2be3bcc0a4fc20daabcf24b30e031c72f804d893f4e58dce94a8c9ac7a226ae9"
+    },
+    {
+      "path": "test/extension/language-features.test.ts",
+      "sha256": "d0cf509e6c8e4e62da60f8f6706bf19fee0b8b1d27c1722fc322809def215cfd"
+    },
+    {
+      "path": "test/extension/m1-ui.test.ts",
+      "sha256": "fb3863bd3359655a05ea0b69b3c06d23976d34adaa74a31ad15b8ac7d8759006"
+    },
+    {
+      "path": "test/extension/mcp-provider-delivery.test.ts",
+      "sha256": "dd15ac53baf156185560dae7d9ca9a2c036f08272b2a263b5cf14102ad292d20"
+    },
+    {
+      "path": "test/extension/official-schema-gate.test.ts",
+      "sha256": "f3bd507123d83b2937c90966f3600bf3408aea2d358833c6e5f381bbc1f5eb1b"
+    },
+    {
+      "path": "test/extension/patch-confirmation.test.ts",
+      "sha256": "b7f552d519d545f7473a8e4cb855302e10f43da2bd6d049c382f9567bf8829ce"
+    },
+    {
+      "path": "test/extension/property-command.test.ts",
+      "sha256": "f21cfbe488ec122ba4ef76e3819dffc486d7116a2714873cfd997e953808351b"
+    },
+    {
+      "path": "test/extension/runtime-capabilities.test.ts",
+      "sha256": "ad471156154fbb3e9a656e2de0463b13edf836335a60d4c62d0f40ad5c518b91"
+    },
+    {
+      "path": "test/extension/scene-probe-evidence.test.ts",
+      "sha256": "c1239574719808e44c1d83bc74de122990586ba86ee2939ecfa570b159bc0534"
+    },
+    {
+      "path": "test/extension/scene-tree.test.ts",
+      "sha256": "ee84b59cdfd58d878f9098e9fd0ae2a41d4cd6bc9ad2f85a0f65410ac59e1059"
+    },
+    {
+      "path": "test/extension/scene-workflow-views.test.ts",
+      "sha256": "8b4910154f31374bbabc5c1e525f311e982562a71edb04597157a13676772029"
+    },
+    {
+      "path": "test/extension/workflow.test.ts",
+      "sha256": "5590929893c5c6e2a176e9c8ed9a3e847794ed56f5f8d32436438f3b2172d577"
+    },
+    {
+      "path": "test/fixtures/api/UI-v2.d.lua",
+      "sha256": "0e712dfe87e347cc2326d193daa581bc7d57b11277fc1ab93fb73f54022c5238"
+    },
+    {
+      "path": "test/fixtures/api/UI.d.lua",
+      "sha256": "043f79affbfa8a952b4eb157df5f998dfc2c2e3d982fcdd000ce481a3ef9d04e"
+    },
+    {
+      "path": "test/fixtures/logs/mixed.txt",
+      "sha256": "bd3ed95e590ed4d67d56291a242aca4f2632128e7d3d67c1075bf22d28ab02af"
+    },
+    {
+      "path": "test/fixtures/logs/structured.txt",
+      "sha256": "cdf04307877c2612c86a4237a6ace52761f83c3c8abf146e523aa79c4a5dd75e"
+    },
+    {
+      "path": "test/fixtures/lua/damaged.lua",
+      "sha256": "e762f91e4f14665e3e0cb25dc5c7ba7a14b37062570682e07949ff34dfbd57f6"
+    },
+    {
+      "path": "test/fixtures/lua/literal-ui.lua",
+      "sha256": "2e575c6c7cee747f0c7a04c675cc3c93111bbd7d079545c2dd12f4113256ded3"
+    },
+    {
+      "path": "test/fixtures/lua/unsafe-call.lua",
+      "sha256": "0135a9b735d948cfc9dceb96d314fccb690f4934d3ba7084ba009f1fb569a670"
+    },
+    {
+      "path": "test/fixtures/projects/alpha/src/GameEntry.lua",
+      "sha256": "f61d7b2e85b5ae61ce66a242dbd86511fe03873a34df16cba37f8abf5eacd4d7"
+    },
+    {
+      "path": "test/fixtures/projects/beta/src/GameEntry.lua",
+      "sha256": "a4682d90e50bee1d55d4d427853e95679988cff2797f4984156cc772de986fd0"
+    },
+    {
+      "path": "test/fixtures/property/anonymous-property.txt",
+      "sha256": "b45ede164380dbbcde803ea1830cf110e246bc8d2cd85a14477ea6067ab08dfa"
+    },
+    {
+      "path": "test/fixtures/registry/valid.csv",
+      "sha256": "9e24007456bc078420c4299bdc249c24d1d903640becd96dd075a9e71ac2431c"
+    },
+    {
+      "path": "test/fixtures/registry/valid.json",
+      "sha256": "8559cb82941e69f839cf4f542f8b3681aa14b9e1becfec7153cf9e5db340e6e5"
+    },
+    {
+      "path": "test/fixtures/registry/valid.yaml",
+      "sha256": "3d6f981bd0de6630ff04b61bae67a2d727fdb7b96fcb215d5f1caa1ed8ae4915"
+    },
+    {
+      "path": "test/fixtures/source-project/src/Feature.lua",
+      "sha256": "ab34bbb20b95809c5e869058a92932c4f1823827e13f47b9453ad91efd67fe23"
+    },
+    {
+      "path": "test/fixtures/source-project/src/GameEntry.lua",
+      "sha256": "b5bde3e2c5f34f62a3adcd53ef30f3ef3c0f21146262b04bbf2b6d2495218f30"
+    },
+    {
+      "path": "test/fixtures/ui/official-v1-indexed.lua",
+      "sha256": "c30e0368ba7ba86c8661a065a7a30be5f66f9d6f5bd0038bbd13bf9e177b2ce6"
+    },
+    {
+      "path": "test/fixtures/ui/official-v1-keyed.lua",
+      "sha256": "143c477988823079a8d5fb5dfec15256578ef268200bd5d3d70b49d1a37c3ea7"
+    },
+    {
+      "path": "test/fixtures/ui/part1.lua",
+      "sha256": "b25d0753ec31df4670144e4f8ecde4a5c6cfcb7933da3a7b27b1fde3d6ee6db3"
+    },
+    {
+      "path": "test/fixtures/ui/part2.lua",
+      "sha256": "40b12b73e355b21795bd332cfc1275286cf4f3e18a1d3c692932b11e1a166d2e"
+    },
+    {
+      "path": "test/integration/api-source.test.ts",
+      "sha256": "0056604753e29b3d52fc6988d0c51f66866ae7c2b83c4d6d565a79c1f94a3ec2"
+    },
+    {
+      "path": "test/integration/atomic-storage.test.ts",
+      "sha256": "b7eed61d84b7bd9f5e63b2e38996a30fd825f72ecd72ba11ec773172891fc985"
+    },
+    {
+      "path": "test/integration/cli-full.test.ts",
+      "sha256": "a6c0fd50a8f245fb2637f0ff4f518667225a1028b286fbddfb30a0870f6e8374"
+    },
+    {
+      "path": "test/integration/cli-m1.test.ts",
+      "sha256": "87c7b0546bff2668b8cbb95431f965e448760c02fa0d2955f9a6e8be52c18df0"
+    },
+    {
+      "path": "test/integration/cli-scene.test.ts",
+      "sha256": "48ed49bd433b78791f09e0b606d1b29e287ba6afde04bd58ffae06906cb2b0c6"
+    },
+    {
+      "path": "test/integration/gameplay-auto-cli.test.ts",
+      "sha256": "8e99416c24fbc3cc205504ab885e9009ce6b7d67612e4568f3110a223e7ab54e"
+    },
+    {
+      "path": "test/integration/gameplay-cli.test.ts",
+      "sha256": "1f90b7dc61e79759447b75a7b1a1a1ea473adf0c11f0cfd964632b3972d140e9"
+    },
+    {
+      "path": "test/integration/gameplay-entry-consistency.test.ts",
+      "sha256": "11f0de235e1aa6aad40dcc18e2c348cba33f74907ff2d81bc40d0280a8655b7d"
+    },
+    {
+      "path": "test/integration/large-ui.test.ts",
+      "sha256": "ab4d1622527c1b8666f4d1a0c3d889e398e9c404668225710064902913dd23e7"
+    },
+    {
+      "path": "test/integration/mcp-in-memory.test.ts",
+      "sha256": "16805da19efb8acd5a2170543429ebfda3a5320a3d999dbcf5d9b0efc6e7d730"
+    },
+    {
+      "path": "test/integration/mcp-launcher.test.ts",
+      "sha256": "549aaa7e286fd161deaa31dd04657a4d8d5d86bad6291d846dc0ee48f3b1d00c"
+    },
+    {
+      "path": "test/integration/mcp-multi-project.test.ts",
+      "sha256": "683d4c385a9f36e824e2f18812fc9ee4f22018603b85ac6875f86081d3541640"
+    },
+    {
+      "path": "test/integration/mcp-performance.test.ts",
+      "sha256": "ee602b7a10efb1d0326d8aee5423516cdbfdec6adf1d985f08a0b7dabb7c300c"
+    },
+    {
+      "path": "test/integration/mcp-stdio.test.ts",
+      "sha256": "d70a3ab9a62424d2ecb63639b05be5c4776e35041f3075ffbf3312769193092e"
+    },
+    {
+      "path": "test/integration/multi-project.test.ts",
+      "sha256": "34eb41e1d19cbdbcd3f9b38b7689bdc23805b5a4c43441bcc144983b550aa8d3"
+    },
+    {
+      "path": "test/integration/privacy-audit.test.ts",
+      "sha256": "e30a41c518a1b16fa7f9d144b0bde91eb0e7026420d52f1da55372db51d9d4be"
+    },
+    {
+      "path": "test/integration/private-source-baseline.test.ts",
+      "sha256": "db68acd65c834b219a1444e3eb9675d6d38756365921dd50b7e6413da6612d43"
+    },
+    {
+      "path": "test/integration/public-release.test.ts",
+      "sha256": "e69d95109b210e602fa926841e61129be98d0a6b0262f9dc154cac43498bef73"
+    },
+    {
+      "path": "test/integration/registry-import.test.ts",
+      "sha256": "acb3bf4e1abba8e4c49b6c990f38abe7ef1c4ac9884fd417617bf5ca28e92df8"
+    },
+    {
+      "path": "test/integration/request-queue.test.ts",
+      "sha256": "ecf024807d34246a037cb50dde68b2a3036bfaa6d77783bc0b07c42b7fbcd7c9"
+    },
+    {
+      "path": "test/integration/scene-cache.test.ts",
+      "sha256": "c90f774e040fb8b797196a44a6151a772c34322beddf2f9967d7d028c236d9a5"
+    },
+    {
+      "path": "test/integration/scene-probe-evidence.test.ts",
+      "sha256": "9717b99311416cf9ee8076c8428deecd79dc7584f7322063afb7a5fc5ca9e21d"
+    },
+    {
+      "path": "test/integration/scene-source-store.test.ts",
+      "sha256": "eb544dbf109e362368d3d8e046acbd6e4a308088a8926a1fb65189a3fd293ac5"
+    },
+    {
+      "path": "test/integration/scene-worker-fuzz.test.ts",
+      "sha256": "02b59e46aa94387c01d0b114be3934c10b53043a829f53b95b791246764c6c39"
+    },
+    {
+      "path": "test/integration/scene-worker-performance.test.ts",
+      "sha256": "9c1847ef9247ea243b3723f9836f9e8a9fbd71ea5248199cf0c8c1baf9e755bf"
+    },
+    {
+      "path": "test/integration/scene-worker.test.ts",
+      "sha256": "2bef4e6d260940bdd562bd67308e7e99b7486385ef71ffa5cb46073a8d255840"
+    },
+    {
+      "path": "test/integration/stable-files.test.ts",
+      "sha256": "b1f1fcec1251c2eb3d676da0e3bc0186912baf3df9d06396050e19a40fb909fe"
+    },
+    {
+      "path": "test/integration/ui-watcher.test.ts",
+      "sha256": "71d78997d4b2fc4b93fc5fc9030cfc716819b2607a57d9759715ce91f14b7278"
+    },
+    {
+      "path": "test/unit/api-declaration-index.test.ts",
+      "sha256": "e8f14ec637417966f89173a67927b4b23356852181179c846a4e1ad05ab7dbaf"
+    },
+    {
+      "path": "test/unit/api-lua-knowledge.test.ts",
+      "sha256": "7a4da53baea90f1e5347fa3e208612e73fba87f6dd61bbef3cf6ff4f3f677e52"
+    },
+    {
+      "path": "test/unit/audit-report.test.ts",
+      "sha256": "725b0f05f5350f2928502c1503503435cf3a4c3378ea6bcfc2df27d2999f3f14"
+    },
+    {
+      "path": "test/unit/block-catalog.test.ts",
+      "sha256": "b500cfc2301e0ecbd2e5819ffa5072142b482872395b635bc6c32d3255efa61c"
+    },
+    {
+      "path": "test/unit/build-workflow.test.ts",
+      "sha256": "324abb98fd96960c1d7e41b43ff5a979cc5bbfbe7d274fa195102d58460488cf"
+    },
+    {
+      "path": "test/unit/cli-args.test.ts",
+      "sha256": "56942f021bf392003a431718a880db29e93ebc3150b7d44447bfa79125327429"
+    },
+    {
+      "path": "test/unit/cli-output.test.ts",
+      "sha256": "fe84ab86d395b6144a1caadafbf4b056ef1adfe3e41bd4993f4265898dd01424"
+    },
+    {
+      "path": "test/unit/code-delivery-bridge-host.test.ts",
+      "sha256": "66bc249b8750e8559d25a646970bd038878a6a7ffe95f46b48bff0b61b003ba9"
+    },
+    {
+      "path": "test/unit/code-delivery-bridge-recovery.test.ts",
+      "sha256": "ad235ce44978780b06e4c571ef9b9816fb4821ddee61902407845134dbfc1b92"
+    },
+    {
+      "path": "test/unit/code-delivery.test.ts",
+      "sha256": "e8d203a3f94a119e18550cfb02595b7ee30330f510f6c4c5451940ce6bf6f37c"
+    },
+    {
+      "path": "test/unit/codex-mcp-registration.test.ts",
+      "sha256": "930ceb5b50e49884e28abbc29ad04f84b9c494bf7d915c0c9bd1955eb7b550e7"
+    },
+    {
+      "path": "test/unit/diagnostics.test.ts",
+      "sha256": "4999f98ed2037ec97ca3394aa77c9416556ff478ea611dbba7a6235ec9603a9a"
+    },
+    {
+      "path": "test/unit/editor-calibration-manual-trigger.test.ts",
+      "sha256": "14c1b4279162fd130b7bc876960ad138d7423903f98741a32daadd2db7306e42"
+    },
+    {
+      "path": "test/unit/editor-diagnostics-policy.test.ts",
+      "sha256": "cc98c2972dac794541fd7c6d50fb33aad312f4b0a3e1bd1376a6b0528cebf101"
+    },
+    {
+      "path": "test/unit/event-doc-index.test.ts",
+      "sha256": "cb1a9998f5a87d96876fc47fe018309cb7b83e45737b65a2f910f35c3e173a9e"
+    },
+    {
+      "path": "test/unit/feedback-store.test.ts",
+      "sha256": "84bcf610423e9e3f1f03e8f480f6d9e31ab04a1b74e84fdf27433ce501163fcc"
+    },
+    {
+      "path": "test/unit/gameplay-auto-prepare.test.ts",
+      "sha256": "797ee91c377612e2ec032d18e32c48d6c80cbc9a69f1bcc2ea7e935522ead5ef"
+    },
+    {
+      "path": "test/unit/gameplay-display.test.ts",
+      "sha256": "e77e1334aa46e6935a8d3aba931bc79240f88be5b56ebf75d0677c5c19bea974"
+    },
+    {
+      "path": "test/unit/gameplay-lua-facts.test.ts",
+      "sha256": "9057ad60f2411deb1161784252ac2a30311cafe150818dfd9a747a332b425ef5"
+    },
+    {
+      "path": "test/unit/gameplay-multiplayer.test.ts",
+      "sha256": "92bf15cb579c1328498ce5b7177521c9477819964f032992e89275b4db313351"
+    },
+    {
+      "path": "test/unit/gameplay-production-scope.test.ts",
+      "sha256": "f963e7ed5065fa5e31adfca4c7d8cf2241e10a92bac8dd1cd6ff6120b38184b5"
+    },
+    {
+      "path": "test/unit/gameplay-routing.test.ts",
+      "sha256": "3c4cc4104aa24236aac50371c818d1621ba4f6e3f1299ff5fcd580db2130e53a"
+    },
+    {
+      "path": "test/unit/gameplay-run-store.test.ts",
+      "sha256": "1305013d527658797957defe850edc7ffc791707ca96c35c5e4fe8830f77a6c4"
+    },
+    {
+      "path": "test/unit/gameplay-schema-report.test.ts",
+      "sha256": "9400c25a5d0b3774222f110ce8d5fca187077071fb71aa4476c47735426f04de"
+    },
+    {
+      "path": "test/unit/gameplay-simulation-gate.test.ts",
+      "sha256": "60b69f4f33ff1df352252d7bb2b6a951a96cd20e5fbe7221a8e466c2953f1bdd"
+    },
+    {
+      "path": "test/unit/gameplay-simulator.test.ts",
+      "sha256": "c6c450f3f32d80c53e71ef0a79622e40e32645555ddd5d251571e9ea2308bc4c"
+    },
+    {
+      "path": "test/unit/gameplay-trace-probe.test.ts",
+      "sha256": "a3937c05723e42ca0697209a6a97fef1c3f8d6aca44518ac98503cdee6e3d33c"
+    },
+    {
+      "path": "test/unit/gameplay-workflow.test.ts",
+      "sha256": "66cda3d8488e6acb8464538f1e3d605a3d0fab297b8f3f267544ae3f3579ebdd"
+    },
+    {
+      "path": "test/unit/generation.test.ts",
+      "sha256": "2befb96f74bce2074f6a425b19579cb33f4f64fae21a1ed70e60ae5d7ae222a8"
+    },
+    {
+      "path": "test/unit/keyed-debouncer.test.ts",
+      "sha256": "73b95a3b2788e130519e3c064ef25965c1e29a59887c276235d4c102a5c4b140"
+    },
+    {
+      "path": "test/unit/launcher-manifest.test.ts",
+      "sha256": "acff62a2725db80e1d7dfc8476b2b66ae4cf1b99c0b0c6d185a71dd16775ece9"
+    },
+    {
+      "path": "test/unit/live-connection.test.ts",
+      "sha256": "f8d41125e8dda95807f1f7bbf0762b811b64d3dd12d1f2fcf69f54d269f72298"
+    },
+    {
+      "path": "test/unit/log-parser.test.ts",
+      "sha256": "d3b906658150d9781aacadea4226e4f3a8f57532afcc472dc94fe4408c717b00"
+    },
+    {
+      "path": "test/unit/lua-literal-parser.test.ts",
+      "sha256": "ebe1594086a8f75000feea02639510ab7294f78ad9fa84c5f21db5d675beb323"
+    },
+    {
+      "path": "test/unit/lua-source-index.test.ts",
+      "sha256": "b914969d05e4f4b55a3771c406f95fe31fd62a8542f4b63ba612cc14c075f2b9"
+    },
+    {
+      "path": "test/unit/mcp-contracts.test.ts",
+      "sha256": "da72903c20746c504a43c8331448e61643681f4abb1e1ce5c70f4a366b78a0d1"
+    },
+    {
+      "path": "test/unit/mcp-documentation.test.ts",
+      "sha256": "1f72f4a6ebc41e4b4fd17564fbe197d0ba61aa89a7fb8608427a763fe9b2d17d"
+    },
+    {
+      "path": "test/unit/mcp-gateway.test.ts",
+      "sha256": "51b2ca1e39ad24f730748619c2d18570f69efaafd7db165e425523657ce7da20"
+    },
+    {
+      "path": "test/unit/mcp-main.test.ts",
+      "sha256": "fe60d35ad3fafeb8dfc67236103c8728fd4eeae75ea5eb935d3f61bfbda21230"
+    },
+    {
+      "path": "test/unit/mcp-pagination.test.ts",
+      "sha256": "a1bd35633518878ab61efaf51b7c4789e909f6c13005f86a803f33c5bd30de1d"
+    },
+    {
+      "path": "test/unit/mcp-presentation.test.ts",
+      "sha256": "7b4e019e302e5ab244805dd381d6c03223f2f8c5c455bce7c18b4488f62c4fde"
+    },
+    {
+      "path": "test/unit/mcp-provider.test.ts",
+      "sha256": "a4633bc0a40ebc8ae42df052f0094ed123aeb970564a1166f8129be7e43eeea4"
+    },
+    {
+      "path": "test/unit/mcp-task-completion-prompt.test.ts",
+      "sha256": "5c8403d5d06c7ccd751578caf9fe12aba270128d2aebc4b78e14877238ae7420"
+    },
+    {
+      "path": "test/unit/model.test.ts",
+      "sha256": "8a3368c900c55dd69471f2386e0796f63c67d9668a0e4ae0da5ce68132862746"
+    },
+    {
+      "path": "test/unit/official-commands.test.ts",
+      "sha256": "97289a5c4533b0b9c4e2c69fdc0d7c4d0c783bc2406fafe9527916d159501329"
+    },
+    {
+      "path": "test/unit/official-connection.test.ts",
+      "sha256": "f98cd84cd2c7200fc4afa26895f6534aaa6aeffe39f8c2c3be7345e49d27eb12"
+    },
+    {
+      "path": "test/unit/official-provider.test.ts",
+      "sha256": "12977a6a5c4d76034a8e9323c178f54aff09f3add768c2a22c87e70545da95cb"
+    },
+    {
+      "path": "test/unit/official-reverse-audit.test.ts",
+      "sha256": "04e86590cb821a8f044eb984b1b101464874dc2a54468e96aaef68102ae0d6fb"
+    },
+    {
+      "path": "test/unit/official-source-index.test.ts",
+      "sha256": "ab06b7d0f73ed87bfdd6ea061102185a1538aeea90a99fddb32072d0a3e9cb29"
+    },
+    {
+      "path": "test/unit/patch-proposal.test.ts",
+      "sha256": "f49162fe7e61734f0266ba67f6d3213dc5a87926769b23392a6feb708ca6174e"
+    },
+    {
+      "path": "test/unit/private-diagnostic-bundle.test.ts",
+      "sha256": "b62e02f9e49192d2477f0f8d7f789c2832c873c3efbc24a4e32470bff2683dbc"
+    },
+    {
+      "path": "test/unit/project-context.test.ts",
+      "sha256": "ccc07acfd3d090585fffefa60deead94a6044749f9d99cd479f1c18a25bbad0a"
+    },
+    {
+      "path": "test/unit/project-display-profile.test.ts",
+      "sha256": "f63416c29699fd44f89ab89618be45d9ac63e0cd0909756b4c1277b908ddf131"
+    },
+    {
+      "path": "test/unit/property-workflow.test.ts",
+      "sha256": "dcbc780001d7234dc57e26c12bfb6c7268de0c3058a5f9858fc2806ff53deb25"
+    },
+    {
+      "path": "test/unit/registry.test.ts",
+      "sha256": "5c650904c199029fce777dab8f7a187f5c941157726495d9705e0543f9bbf60c"
+    },
+    {
+      "path": "test/unit/resource-catalog.test.ts",
+      "sha256": "1353955fdaf3643580ecb54458897f6c27630c6ab2af3eb886b8d9ce935ce222"
+    },
+    {
+      "path": "test/unit/scene-cache-summary.test.ts",
+      "sha256": "56fb86f3dba768a2121eac63bce26ff31893db9aa16c3adf0018c633bd58f241"
+    },
+    {
+      "path": "test/unit/scene-command-contributions.test.ts",
+      "sha256": "9a59d21818e19f045bd6c2885887899a0f618c46f1638ca85139fedd226a2ea2"
+    },
+    {
+      "path": "test/unit/scene-container.test.ts",
+      "sha256": "b91faa5090bea64ae214860635339320e1a9247092ac625cf128b1a051954b2e"
+    },
+    {
+      "path": "test/unit/scene-diagnostics.test.ts",
+      "sha256": "2e0d01ce262ee96b91b1f2b8ac78e271ac95cb56b4ff80bf0725007a781e65a6"
+    },
+    {
+      "path": "test/unit/scene-export-probe.test.ts",
+      "sha256": "462b26939507ae171659cc769731dc0ba552d4e7dc84003db676a79f1160d56b"
+    },
+    {
+      "path": "test/unit/scene-geometry.test.ts",
+      "sha256": "93a4f7e341bb3ebc1bd56b2ca5c7a9298cd807070c239eba22e2f015a87b28f6"
+    },
+    {
+      "path": "test/unit/scene-normalize.test.ts",
+      "sha256": "4bf720e665e47c2b05afdf2a41a8f012475c714d71422e92df613c70cf857f67"
+    },
+    {
+      "path": "test/unit/scene-placement-journal-export.test.ts",
+      "sha256": "70fe89f8b225cf95252764e67850ad7e06aa49afba3eb02daa2707e527bf9037"
+    },
+    {
+      "path": "test/unit/scene-probe-evidence.test.ts",
+      "sha256": "ec70a24c789ebfca52870030c3be0e311d79fa2540b89097313ff324fdb56897"
+    },
+    {
+      "path": "test/unit/scene-query-diff-spatial.test.ts",
+      "sha256": "771796258d45b741cc52b4d7db2db6400557909ab6d7fac045004d5d77305da6"
+    },
+    {
+      "path": "test/unit/scene-rebind-patch.test.ts",
+      "sha256": "082e07322580e2bf2e4cc548d63d163d158c1e2c6a30ad4363f5d43e3dbf83c4"
+    },
+    {
+      "path": "test/unit/scene-rebind.test.ts",
+      "sha256": "6491edb7e38e3ca284f069037e638138659fcea64eb8f10cf32d24dabb570ba5"
+    },
+    {
+      "path": "test/unit/scene-refresh-queue.test.ts",
+      "sha256": "b446afbccdbf38158b7ecaf4b4c40ab3406360153056ad5649aae090c1c7fb28"
+    },
+    {
+      "path": "test/unit/scene-registry.test.ts",
+      "sha256": "8481e2e18827d2ad5727701b3f34d37870d175989d3bdb74047176d0defcd301"
+    },
+    {
+      "path": "test/unit/scene-semantic-catalog.test.ts",
+      "sha256": "a505ebcd269ef11cd1a45aee549e60400a1f1c220fcabcd3602405826f025047"
+    },
+    {
+      "path": "test/unit/scene-wire.test.ts",
+      "sha256": "4c8e452ec15e8c012363610686264e98b2810984912362f74bfc8179c8c2c513"
+    },
+    {
+      "path": "test/unit/scene-worker-protocol.test.ts",
+      "sha256": "4ed4594ecfb1a2d934c4966da1d24ea7cc64ee78224b127241f7d298a4dd6889"
+    },
+    {
+      "path": "test/unit/smoke.test.ts",
+      "sha256": "e28ef563c330731771d31d802f952889e10aaa6b83a9ce078e7c2e8faa43f104"
+    },
+    {
+      "path": "test/unit/status-display.test.ts",
+      "sha256": "074dde01f4247a501fe49cc8a50b1b3439d62c705ec6ffb58b8cb2235d82b4ac"
+    },
+    {
+      "path": "test/unit/status.test.ts",
+      "sha256": "57a99406f7fa05544b50104c91ecf7ec7ea0f002d1c5b1cfb2bc95783bf1410a"
+    },
+    {
+      "path": "test/unit/ui-adapter.test.ts",
+      "sha256": "9ab433239a3ce7c527cef2115c6fdcf6f4cdae9eb390e1dc56bbb4afab97d457"
+    },
+    {
+      "path": "test/unit/ui-diff.test.ts",
+      "sha256": "cdc900e0f1b165aad393e3b95177a76dd85fa4a6aa96e031021c217f375595d9"
+    },
+    {
+      "path": "test/unit/ui-export.test.ts",
+      "sha256": "963fa450638b955cbfcc512a7dd4ad82182d8d688c088e29b7abda3c8138c445"
+    },
+    {
+      "path": "test/unit/ui-index.test.ts",
+      "sha256": "ae0ca0e7f92636e3faa3157eeb4bc66b72c90c2166a2ca6129114eb19754fdae"
+    },
+    {
+      "path": "test/unit/ui-layer-order-guard.test.ts",
+      "sha256": "b45a05e332fc1ecf003d97fe7af62a21206538ca8efbffd42e90adde81c51664"
+    },
+    {
+      "path": "test/unit/ui-runtime-geometry.test.ts",
+      "sha256": "e8e467c0fb611a54b650a0bd89e3438ef400c4bd85d5e8b09d79c76e5856110c"
+    },
+    {
+      "path": "test/unit/ui-runtime-inspection.test.ts",
+      "sha256": "1789bdc28f7aa396c274d6b9e96f70a79b8e4c1049fc2bf8c2d954a7cea9a2de"
+    },
+    {
+      "path": "tsconfig.cli.json",
+      "sha256": "6629890862ccfad2788d31d3979c73a246333f5eee76208d2ddf8e66fe76c9e6"
+    },
+    {
+      "path": "tsconfig.extension.json",
+      "sha256": "60ac77889841072bd029b78a86a26508a174bfd5dfe625f9994a6b89ab85fc71"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha256": "2e9024cfe404de4421db1a5ca03849e3a577ac392cd34f991f2e54030ffa256c"
+    },
+    {
+      "path": "vitest.config.ts",
+      "sha256": "fa2d8f9b5ad6599176e8885a27fd539db8fc69035bcfad81560b8591d6508747"
+    }
+  ]
+}

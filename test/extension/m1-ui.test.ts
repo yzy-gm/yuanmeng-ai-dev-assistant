@@ -37,6 +37,15 @@ async function runProjectLauncher(root: string, args: readonly string[]): Promis
   }
 }
 
+async function waitForStatusText(api: CompanionApi, root: string, expected: RegExp): Promise<void> {
+  const deadline = Date.now() + 3000;
+  while (Date.now() <= deadline) {
+    if (expected.test(api.statusText(root))) return;
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+  }
+  assert.match(api.statusText(root), expected);
+}
+
 function testRoot(name: 'A' | 'B'): string {
   const value = process.env[`YMAI_EXTENSION_TEST_ROOT_${name}`];
   assert.ok(value, `missing test root ${name}`);
@@ -59,18 +68,34 @@ export const m1UiTests: ExtensionTestCase[] = [{
     let selectedRoot = rootA;
     let refreshCount = 0;
     let freezeOfficialOutput = false;
+    let delayedOfficialWriteMilliseconds = 0;
+    const pendingOfficialWrites: Promise<void>[] = [];
     const fakeOfficial = vscode.commands.registerCommand('dreamhelper.GetCustomUIData', async () => {
       refreshCount += 1;
       const dataDirectory = join(selectedRoot, 'src', 'Data');
       await mkdir(dataDirectory, { recursive: true });
       const idOffset = freezeOfficialOutput ? 100 : (refreshCount - 1) * 100;
-      await writeFile(join(dataDirectory, 'CustomUIData.lua'), [
-        'return { schemaVersion = 1, roots = {',
-        `  { id = '${101 + idOffset}', name = '经验', type = 'Text', children = {} },`,
-        `  { id = '${102 + idOffset}', name = '经验', type = 'Text', children = {} },`,
-        '} }',
-        '',
-      ].join('\n'), 'utf8');
+      const writeOfficialData = async (): Promise<void> => {
+        await writeFile(join(dataDirectory, 'CustomUIData.lua'), [
+          'return { schemaVersion = 1, roots = {',
+          `  { id = '${101 + idOffset}', name = '经验', type = 'Text', children = {} },`,
+          `  { id = '${102 + idOffset}', name = '经验', type = 'Text', children = {} },`,
+          '} }',
+          '',
+        ].join('\n'), 'utf8');
+      };
+      if (delayedOfficialWriteMilliseconds > 0) {
+        const delayMilliseconds = delayedOfficialWriteMilliseconds;
+        delayedOfficialWriteMilliseconds = 0;
+        const pendingWrite = new Promise<void>((resolve, reject) => {
+          setTimeout(() => {
+            void writeOfficialData().then(resolve, reject);
+          }, delayMilliseconds);
+        });
+        pendingOfficialWrites.push(pendingWrite);
+        return;
+      }
+      await writeOfficialData();
     });
     try {
       const { extension, api } = await activateCompanion();
@@ -80,13 +105,21 @@ export const m1UiTests: ExtensionTestCase[] = [{
         'yuanmengAi.refreshUi',
         'yuanmengAi.findUi',
         'yuanmengAi.openWizard',
+        'yuanmengAi.setMapDisplayName',
         'yuanmengAi.copyCliCommand',
         'yuanmengAi.importRegistry',
+        'yuanmengAi.importSceneIdFromClipboard',
+        'yuanmengAi.previewScenePlan',
+        'yuanmengAi.copySceneHierarchyPath',
+        'yuanmengAi.copySceneLuaConstant',
+        'yuanmengAi.copySceneJsonSnippet',
+        'yuanmengAi.findSceneLuaReferences',
+        'yuanmengAi.planSceneSelection',
       ]) {
         assert.ok(commandIds.has(command), `missing command contribution ${command}`);
       }
       assert.ok(extension.packageJSON.contributes?.viewsContainers?.activitybar?.length > 0);
-      assert.ok(extension.packageJSON.contributes?.views?.yuanmengAi?.length >= 5);
+      assert.ok(extension.packageJSON.contributes?.views?.yuanmengAi?.length >= 8);
 
       const contexts = api.listContexts();
       assert.equal(contexts.length, 2);
@@ -103,7 +136,10 @@ export const m1UiTests: ExtensionTestCase[] = [{
           lastProbeAt: null,
         });
         assert.equal(initialStatus.ui.freshness, 'missing');
-        assert.match(await readFile(join(root, '.yuanmeng-inspector', 'bin', 'ymai.cmd'), 'utf8'), /Get-FileHash/u);
+        const launcherText = await readFile(join(root, '.yuanmeng-inspector', 'bin', 'ymai.cmd'), 'utf8');
+        assert.doesNotMatch(launcherText, /powershell|Get-FileHash/iu);
+        assert.match(launcherText, /ymai\.cjs/iu);
+        assert.match(await readFile(join(root, '.yuanmeng-inspector', 'bin', 'ymai.cjs'), 'utf8'), /createHash/u);
         const launcherManifest = JSON.parse(await readFile(
           join(root, '.yuanmeng-inspector', 'bin', 'cli-launcher.json'),
           'utf8',
@@ -125,9 +161,20 @@ export const m1UiTests: ExtensionTestCase[] = [{
       const snapshot = JSON.parse(await readFile(
         join(rootA, '.yuanmeng-inspector', 'ui', 'current.json'),
         'utf8',
-      )) as { sources: Array<{ evidence: string; officialExtensionVersion: string | null }> };
+      )) as { snapshotId: string; sources: Array<{ evidence: string; officialExtensionVersion: string | null }> };
       assert.deepEqual(snapshot.sources.map((source) => source.evidence), ['EXTENSION_HOST']);
-      assert.deepEqual(snapshot.sources.map((source) => source.officialExtensionVersion), [null]);
+      assert.deepEqual(snapshot.sources.map((source) => source.officialExtensionVersion), ['0.0.0-test']);
+      const layerOrderBaseline = JSON.parse(await readFile(
+        join(rootA, '.yuanmeng-inspector', 'ui', 'layer-order-baseline.json'),
+        'utf8',
+      )) as { snapshotId: string };
+      const layerOrderStatus = JSON.parse(await readFile(
+        join(rootA, '.yuanmeng-inspector', 'ui', 'layer-order-status.json'),
+        'utf8',
+      )) as { state: string; writesOfficialMap: boolean };
+      assert.equal(layerOrderBaseline.snapshotId, snapshot.snapshotId);
+      assert.equal(layerOrderStatus.state, 'baseline-created');
+      assert.equal(layerOrderStatus.writesOfficialMap, false);
       const registry = JSON.parse(await readFile(
         join(rootA, '.yuanmeng-inspector', 'registry', 'registry.json'),
         'utf8',
@@ -146,6 +193,10 @@ export const m1UiTests: ExtensionTestCase[] = [{
         assert.deepEqual(search.candidates.map((candidate) => candidate.id), ['101', '102']);
       }
       selectedRoot = rootA;
+      // The real official command can resolve before its UI files land. The
+      // companion refresh must wait for that post-command export instead of
+      // accepting the pre-command files as an unchanged successful refresh.
+      delayedOfficialWriteMilliseconds = 1_000;
       const cliRefresh = await runProjectLauncher(rootA, ['refresh-ui', '--timeout', '8', '--json']);
       assert.equal(cliRefresh.exitCode, 0, cliRefresh.stderr);
       assert.equal((JSON.parse(cliRefresh.stdout) as { code: string }).code, 'OK');
@@ -155,17 +206,22 @@ export const m1UiTests: ExtensionTestCase[] = [{
       if (refreshedSearch.kind === 'ambiguous') {
         assert.deepEqual(refreshedSearch.candidates.map((candidate) => candidate.id), ['201', '202']);
       }
+      await Promise.all(pendingOfficialWrites);
       freezeOfficialOutput = true;
       const snapshotBeforeUnchanged = api.listContexts().find((context) => context.root === rootA)?.snapshotId;
+      const snapshotCreatedAtBeforeUnchanged = (JSON.parse(await readFile(
+        join(rootA, '.yuanmeng-inspector', 'ui', 'current.json'),
+        'utf8',
+      )) as { createdAt: string }).createdAt;
       const unchangedRefresh = await runProjectLauncher(rootA, ['refresh-ui', '--timeout', '8', '--json']);
       assert.equal(unchangedRefresh.exitCode, 0, unchangedRefresh.stderr);
       const unchangedPayload = JSON.parse(unchangedRefresh.stdout) as { code: string; message: string };
       assert.equal(unchangedPayload.code, 'OK');
-      assert.equal(unchangedPayload.message, '结构无变化，继续使用现有快照。');
+      assert.equal(unchangedPayload.message, '已检查 UI，内容未变化；现有快照仍为最新。');
       const unchangedStatus = JSON.parse(await readFile(
         join(rootA, '.yuanmeng-inspector', 'status.json'),
         'utf8',
-      )) as { link: { state: string; reasonCode: string }; ui: { freshness: string } };
+      )) as { link: { state: string; reasonCode: string }; ui: { freshness: string; lastRefreshAt: string } };
       assert.deepEqual({
         state: unchangedStatus.link.state,
         reasonCode: unchangedStatus.link.reasonCode,
@@ -174,6 +230,10 @@ export const m1UiTests: ExtensionTestCase[] = [{
         reasonCode: 'REFRESH_SUCCEEDED_UNCHANGED',
       });
       assert.equal(unchangedStatus.ui.freshness, 'fresh');
+      assert.ok(
+        Date.parse(unchangedStatus.ui.lastRefreshAt) > Date.parse(snapshotCreatedAtBeforeUnchanged),
+        '成功检查但内容未变化时，最近检查时间也必须推进，不能再次显示成陈旧数据',
+      );
       assert.equal(api.listContexts().find((context) => context.root === rootA)?.snapshotId, snapshotBeforeUnchanged);
       const listedIds = await runProjectLauncher(rootA, [
         'list-ids',
@@ -199,7 +259,23 @@ export const m1UiTests: ExtensionTestCase[] = [{
         assert.equal(fields.length, 5);
         assert.ok(fields.every((field) => field.length > 0));
       }
-      assert.deepEqual(api.wizardSteps, ['检测官方插件', '开启联动', '激活工程', '更新 VSCode 工程 / 获取 UI 结构', '搜索控件']);
+      assert.deepEqual(api.wizardSteps, [
+        '选择目标工程',
+        'UI：获取结构并查找控件',
+        '场景：可选的本地只读快照',
+        '台账：核对 ID 与信号',
+        'Lua：检查引用并预览修改',
+        'API：查询官方公开签名',
+        '属性：读取或预览单元件修改',
+        '构建：确认后调用官方合成',
+      ]);
+      await vscode.commands.executeCommand('yuanmengAi.setMapDisplayName', rootA, '  星光超市  ');
+      assert.match(api.statusText(rootA), /地图:星光超市/u);
+      await vscode.commands.executeCommand('yuanmengAi.setMapDisplayName', rootA, '星光超市·夜间版');
+      assert.match(api.statusText(rootA), /地图:星光超市·夜间版/u);
+      const cliRename = await runProjectLauncher(rootA, ['set-map-name', 'AI自动填写地图名', '--json']);
+      assert.equal(cliRename.exitCode, 0, cliRename.stderr);
+      await waitForStatusText(api, rootA, /地图:AI自动填写地图名/u);
       await vscode.commands.executeCommand('yuanmengAi.copyCliCommand', rootA);
       assert.equal(await vscode.env.clipboard.readText(), '& ".\\.yuanmeng-inspector\\bin\\ymai.cmd" status --json');
     } finally {

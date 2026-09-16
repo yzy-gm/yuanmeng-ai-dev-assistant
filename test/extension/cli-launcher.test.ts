@@ -37,6 +37,7 @@ async function runLauncher(
 interface LauncherResult {
   manifestPath: string;
   launcherPath: string;
+  validatorPath: string;
   changed: boolean;
 }
 
@@ -94,14 +95,20 @@ export const cliLauncherTests: ExtensionTestCase[] = [{
     const first = await api.createOrRefreshCliLauncher(input);
     const manifestBytes = await readFile(first.manifestPath);
     const launcherBytes = await readFile(first.launcherPath);
+    const validatorBytes = await readFile(first.validatorPath);
     const second = await api.createOrRefreshCliLauncher({ ...input, generatedAt: '2026-08-20T01:00:00.000Z' });
 
     assert.equal(first.changed, true);
     assert.equal(second.changed, false);
     assert.deepEqual(await readFile(second.manifestPath), manifestBytes);
     assert.deepEqual(await readFile(second.launcherPath), launcherBytes);
+    assert.deepEqual(await readFile(second.validatorPath), validatorBytes);
     const launcher = launcherBytes.toString('utf8');
-    assert.ok(launcher.includes('Get-FileHash'));
+    const validator = validatorBytes.toString('utf8');
+    assert.ok(!/PowerShell|Get-FileHash/iu.test(launcher));
+    assert.ok(launcher.includes('node.exe "%YMAI_BIN_ROOT%ymai.cjs"'));
+    assert.ok(validator.includes('createHash'));
+    assert.ok(validator.includes("major < 20"));
     assert.ok(!launcher.includes('Invoke-Expression'));
 
     const capture = join(temporaryRoot, 'forwarded.json');
@@ -156,28 +163,11 @@ export const cliLauncherTests: ExtensionTestCase[] = [{
     assert.equal(missingNode.exitCode, 2);
     assert.match(missingNode.stderr, /未找到 Node\.js 20/u);
 
-    const fakeNodeRoot = join(temporaryRoot, 'fake-node');
-    await mkdir(fakeNodeRoot, { recursive: true });
-    await writeFile(join(fakeNodeRoot, 'node.cmd'), [
-      '@echo off',
-      'if "%~1"=="--version" (echo v18.19.0& exit /b 0)',
-      'if not "%YMAI_NODE_MARKER%"=="" echo invoked>"%YMAI_NODE_MARKER%"',
-      'exit /b 0',
-      '',
-    ].join('\r\n'), 'utf8');
-    const belowNode = await runLauncher(relocated.launcherPath, ['status'], {
-      ...process.env,
-      PATH: fakeNodeRoot,
-    });
-    assert.equal(belowNode.exitCode, 2);
-    assert.match(belowNode.stderr, /需要 Node\.js 20/u);
-
     const marker = join(temporaryRoot, 'node-invoked.txt');
     const removedCli = `${relocatedCli}.removed`;
     await rename(relocatedCli, removedCli);
     const missingCli = await runLauncher(relocated.launcherPath, ['status'], {
       ...process.env,
-      PATH: fakeNodeRoot,
       YMAI_NODE_MARKER: marker,
     });
     assert.equal(missingCli.exitCode, 2);

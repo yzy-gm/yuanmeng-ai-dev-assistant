@@ -86,3 +86,19 @@ export function findUi(
   }
   return { kind: 'ambiguous', candidates: matches };
 }
+
+/**
+ * AI 默认使用的确定性控件解析器。
+ *
+ * - 纯十进制：按实例 ID 精确查询；
+ * - `/` 开头：按完整层级路径精确查询；
+ * - 其他内容：按控件对象名精确查询。
+ *
+ * 这里故意不做模糊匹配，避免 AI 在重名或近似名称之间静默选错。
+ */
+export function resolveUiByNameOrPath(snapshot: UiSnapshot, query: string): UiSearchResult {
+  const normalized = query.trim();
+  if (/^\d{1,20}$/u.test(normalized)) return findUi(snapshot, normalized, { mode: 'exact-id' });
+  if (normalized.startsWith('/')) return findUi(snapshot, normalized, { mode: 'exact-path' });
+  return findUi(snapshot, normalized, { mode: 'exact-name' });
+}

@@ -9,6 +9,15 @@ $ErrorActionPreference = 'Stop'
 $extensionId = 'bujianxingguang.yuanmeng-ai-dev-assistant'
 $expectedMissingMessage = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('5YWD5qKmIEFJIOW8gOWPkeWKqeaJi+W3suWNuOi9veaIluWuieijhei3r+W+hOWkseaViA=='))
 $workspaceRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+$packageManifest = Get-Content -LiteralPath (Join-Path $workspaceRoot 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$baseVersion = [string]$packageManifest.version
+if ($baseVersion -match '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-private\.(?<private>\d+)$') {
+  $upgradeVersion = "$($Matches.major).$($Matches.minor).$($Matches.patch)-private.$([int]$Matches.private + 1)"
+} elseif ($baseVersion -match '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$') {
+  $upgradeVersion = "$($Matches.major).$($Matches.minor).$([int]$Matches.patch + 1)"
+} else {
+  throw "Unsupported extension version format for lifecycle acceptance: $baseVersion"
+}
 $allowedRoot = [IO.Path]::GetFullPath((Join-Path $workspaceRoot 'work\acceptance'))
 $requestedProfile = [IO.Path]::GetFullPath($ProfileRoot)
 $allowedPrefix = $allowedRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
@@ -51,6 +60,7 @@ function Start-IsolatedCode([string]$Profile, [string]$ExtensionDirectory, [stri
     '--extensions-dir', $ExtensionDirectory,
     '--new-window', '--skip-welcome', '--skip-release-notes',
     '--disable-updates', '--disable-telemetry', '--skip-add-to-recently-opened',
+    '--disable-experiments', '--disable-gpu', '--disable-crash-reporter',
     $Project
   )
   if ($DisableCompanion) { $arguments += @('--disable-extension', $extensionId) }
@@ -141,7 +151,7 @@ $project = Join-Path $profile 'project'
 $inspector = Join-Path $project '.yuanmeng-inspector'
 $launcher = Join-Path $inspector 'bin\ymai.cmd'
 $launcherManifest = Join-Path $inspector 'bin\cli-launcher.json'
-$upgradeVsix = Join-Path $profile 'yuanmeng-ai-dev-assistant-0.1.1-upgrade-fixture.vsix'
+$upgradeVsix = Join-Path $profile "yuanmeng-ai-dev-assistant-$upgradeVersion-upgrade-fixture.vsix"
 $activationLogHashes = @()
 $completed = $false
 
@@ -173,7 +183,7 @@ try {
 
   Invoke-CodeCli @('--user-data-dir', $profile, '--extensions-dir', $extensionDirV1, '--install-extension', $vsix, '--force')
   $started = Start-IsolatedCode $profile $extensionDirV1 $project
-  $firstManifest = Wait-Launcher $launcherManifest '0.1.0' $extensionDirV1
+  $firstManifest = Wait-Launcher $launcherManifest $baseVersion $extensionDirV1
   $firstActivationLog = Wait-ActivationLog $profile $started
   $firstLauncherHash = (Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash
   $firstManifestHash = (Get-FileHash -LiteralPath $launcherManifest -Algorithm SHA256).Hash
@@ -187,11 +197,11 @@ try {
   Stop-IsolatedCode $profile
   $activationLogHashes += (Get-FileHash -LiteralPath $firstActivationLog.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
 
-  & node (Join-Path $PSScriptRoot 'build-upgrade-fixture.mjs') $vsix $upgradeVsix '--version' '0.1.1' | Out-Null
+  & node (Join-Path $PSScriptRoot 'build-upgrade-fixture.mjs') $vsix $upgradeVsix '--version' $upgradeVersion | Out-Null
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $upgradeVsix -PathType Leaf)) { throw 'Upgrade fixture builder failed.' }
   Invoke-CodeCli @('--user-data-dir', $profile, '--extensions-dir', $extensionDirV1, '--install-extension', $upgradeVsix, '--force')
   $started = Start-IsolatedCode $profile $extensionDirV1 $project
-  $upgradeManifest = Wait-Launcher $launcherManifest '0.1.1' $extensionDirV1
+  $upgradeManifest = Wait-Launcher $launcherManifest $upgradeVersion $extensionDirV1
   $upgradeActivationLog = Wait-ActivationLog $profile $started
   $upgradeLauncherHash = (Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash
   $upgradeManifestHash = (Get-FileHash -LiteralPath $launcherManifest -Algorithm SHA256).Hash
@@ -201,7 +211,7 @@ try {
 
   Invoke-CodeCli @('--user-data-dir', $profile, '--extensions-dir', $extensionDirV2, '--install-extension', $upgradeVsix, '--force')
   $started = Start-IsolatedCode $profile $extensionDirV2 $project
-  $relocatedManifest = Wait-Launcher $launcherManifest '0.1.1' $extensionDirV2
+  $relocatedManifest = Wait-Launcher $launcherManifest $upgradeVersion $extensionDirV2
   $relocationActivationLog = Wait-ActivationLog $profile $started
   if ([string]$relocatedManifest.cliPath -eq [string]$upgradeManifest.cliPath) { throw 'Relocation did not refresh the extension path.' }
   Stop-IsolatedCode $profile
@@ -216,7 +226,7 @@ try {
   Stop-IsolatedCode $profile
 
   $started = Start-IsolatedCode $profile $extensionDirV2 $project
-  [void](Wait-Launcher $launcherManifest '0.1.1' $extensionDirV2)
+  [void](Wait-Launcher $launcherManifest $upgradeVersion $extensionDirV2)
   $reenabledActivationLog = Wait-ActivationLog $profile $started
   $sessionPath = Join-Path $inspector 'runtime\session.json'
   if (-not (Test-Path -LiteralPath $sessionPath -PathType Leaf)) { throw 'Re-enabled extension did not create a new queue session.' }

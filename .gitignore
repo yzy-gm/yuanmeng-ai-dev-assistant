@@ -3,7 +3,7 @@ out/
 coverage/
 .vscode-test/
 work/
-outputs/*.vsix
+outputs/
 *.vsix
 *.log
 .env
@@ -15,4 +15,8 @@ outputs/*.vsix
 **/src/Data/CustomProperty_*.lua
 **/dist/play.lua
 **/dist/play.min.lua
+**/LayerData.dat
+**/LayerData-Auto.dat
+**/LayerData.pbin
+**/Resource/**/*.pbin
 !test/fixtures/**/*.lua

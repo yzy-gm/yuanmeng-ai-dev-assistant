@@ -68,6 +68,22 @@ async function fixtureFiles(): Promise<LuaSourceFile[]> {
 }
 
 describe('Lua source index', () => {
+  it('accepts UTF-8 BOM emitted at the start of official Lua project files', () => {
+    const index = buildLuaSourceIndex(
+      [{ path: 'src/GameEntry.lua', source: '\uFEFFlocal GameEntry = {}\nreturn GameEntry\n' }],
+      emptyRegistry,
+      { calls: [], configuredIdFields: [] },
+    );
+
+    expect(index.files).toEqual([
+      expect.objectContaining({ path: 'src/GameEntry.lua' }),
+    ]);
+    expect(index.returnedModules).toContainEqual(expect.objectContaining({
+      path: 'src/GameEntry.lua',
+      value: 'GameEntry',
+    }));
+  });
+
   it('does not classify arbitrary numbers as IDs', () => {
     const index = buildLuaSourceIndex(
       [{ path: 'src/GameServer.lua', source: 'local retry = 3\n' }],
@@ -145,6 +161,57 @@ describe('Lua source index', () => {
     expect(index.files[0]?.side).toEqual({ value: 'unknown', evidence: null });
   });
 
+  it('indexes a multiline official event registration and its concrete signal-box guard', () => {
+    const index = buildLuaSourceIndex([{
+      path: 'src/GameServer.lua',
+      source: [
+        '---@ymai-side server',
+        'local TEST_SIGNAL_BOX_ID = 517',
+        'local function OnEnter(playerId, signalBoxId)',
+        '  if signalBoxId ~= TEST_SIGNAL_BOX_ID then',
+        '    return',
+        '  end',
+        'end',
+        'System:RegisterEvent(',
+        '  Events.ON_CHARACTER_ENTER_SIGNAL_BOX,',
+        '  OnEnter',
+        ')',
+        '',
+      ].join('\n'),
+    }], emptyRegistry, api);
+
+    const registration = index.calls.find((call) => call.qualifiedName === 'System:RegisterEvent');
+    expect(registration?.arguments[0]?.qualifiedName).toBe('Events.ON_CHARACTER_ENTER_SIGNAL_BOX');
+    expect(registration?.sceneInstanceGuards).toEqual(['517']);
+    expect(registration?.side.value).toBe('server');
+  });
+
+  it('infers a registered callback as server-side from an immediate non-server return guard', () => {
+    const index = buildLuaSourceIndex([{
+      path: 'src/GameEntry.lua',
+      source: [
+        'local TEST_SIGNAL_BOX_ID = 517',
+        'local function OnEnter(playerId, signalBoxId)',
+        '  if not System:IsServer() or signalBoxId ~= TEST_SIGNAL_BOX_ID then',
+        '    return',
+        '  end',
+        'end',
+        'System:RegisterEvent(',
+        '  Events.ON_CHARACTER_ENTER_SIGNAL_BOX,',
+        '  OnEnter',
+        ')',
+        '',
+      ].join('\n'),
+    }], emptyRegistry, api);
+
+    const registration = index.calls.find((call) => call.qualifiedName === 'System:RegisterEvent');
+    expect(registration?.side).toEqual({
+      value: 'server',
+      evidence: 'callback-guard:not System:IsServer() then return',
+    });
+    expect(registration?.sceneInstanceGuards).toEqual(['517']);
+  });
+
   it('returns relative where-used results and separates id, ui and signal kinds', async () => {
     const index = buildLuaSourceIndex(await fixtureFiles(), registry, api);
 
@@ -161,6 +228,35 @@ describe('Lua source index', () => {
       && item.column >= 1
       && item.context.length > 0
     ))).toBe(true);
+  });
+
+  it('preserves every registry record for one literal and filters scene registry kinds exactly', () => {
+    const sharedValue = '84001';
+    const records = [
+      registryRecord({ recordId: 'shared-ui', value: sharedValue }),
+      registryRecord({ recordId: 'shared-instance', kind: 'scene-instance', value: sharedValue }),
+      registryRecord({ recordId: 'shared-type', kind: 'element-type', value: sharedValue }),
+      registryRecord({ recordId: 'shared-layer', kind: 'scene-layer', value: sharedValue }),
+      registryRecord({ recordId: 'shared-signal', kind: 'signal', value: sharedValue }),
+    ];
+    const index = buildLuaSourceIndex([{
+      path: 'src/GameEntry.lua',
+      source: 'local target = "84001"\nlocal retry = 84002\n',
+    }], { schemaVersion: 1, records }, { calls: [], configuredIdFields: [] });
+
+    expect(whereUsed(index, { value: sharedValue, kind: 'id' })).toHaveLength(4);
+    expect(whereUsed(index, { value: sharedValue, kind: 'ui' })).toEqual([
+      expect.objectContaining({ evidence: { source: 'registry', recordId: 'shared-ui' } }),
+    ]);
+    for (const kind of ['scene-instance', 'element-type', 'scene-layer'] as const) {
+      expect(whereUsed(index, { value: sharedValue, kind })).toEqual([
+        expect.objectContaining({ registryKind: kind }),
+      ]);
+    }
+    expect(whereUsed(index, { value: sharedValue, kind: 'signal' })).toEqual([
+      expect.objectContaining({ evidence: { source: 'registry', recordId: 'shared-signal' } }),
+    ]);
+    expect(whereUsed(index, { value: '84002', kind: 'id' })).toEqual([]);
   });
 
   it('rejects unsafe absolute paths and damaged Lua instead of executing it', () => {

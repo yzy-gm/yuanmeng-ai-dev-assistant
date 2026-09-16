@@ -53,12 +53,15 @@ const bytes = await readFile(vsixPath);
 const entries = entriesFromZip(bytes);
 const findings = [];
 const add = (category, entry, detail) => findings.push({ category, relativePath: entry.name, detail });
-const secretPatterns = [/(?:ghp|github_pat|sk|xox[baprs])_[A-Za-z0-9_-]{12,}/u, /\bBearer\s+[A-Za-z0-9._-]{12,}/iu];
-const absolutePath = /\b[A-Za-z]:\\[^\r\n"']*(?:src\\|dist\\|CustomUIData|GameEntry\.lua|\.yuanmeng-inspector)[^\r\n"']*/iu;
+const secretPatterns = [/\b(?:ghp|github_pat|sk|xox[baprs])_[A-Za-z0-9_-]{12,}/u, /\bBearer\s+[A-Za-z0-9._-]{12,}/iu];
+const absolutePath = /(?:\b[A-Za-z]:[\\/]|\\\\[A-Za-z0-9._$-][A-Za-z0-9._$ -]{0,254}[\\/][A-Za-z0-9._$ -]{1,255}[\\/]|\/\/[A-Za-z0-9._$-][A-Za-z0-9._$ -]{0,254}\/[A-Za-z0-9._$ -]{1,255}\/|\/(?:Users|home|mnt|opt|srv|var|tmp)\/)[^\r\n"']*(?:src[\\/]|dist[\\/]|CustomUIData|GameEntry\.lua|\.yuanmeng-inspector)[^\r\n"']*/iu;
 for (const entry of entries) {
   const lower = entry.name.toLowerCase();
   if (lower === 'extension.js' || lower === 'dream-helper.vsix') add('official-binary', entry, '疑似官方扩展入口或二进制');
   if (lower.endsWith('.log') || /(?:customuidata\d*|customproperty_.+)\.lua$/iu.test(lower)) add('private-data', entry, '日志或真实导出文件不能进入 VSIX');
+  if (/(?:^|\/)(?:layerdata(?:-auto)?\.dat|layerdata\.pbin)$/iu.test(lower) || lower.includes('/.yuanmeng-inspector/')) {
+    add('private-scene-data', entry, '原始场景文件或私有派生缓存不能进入 VSIX');
+  }
   if (entry.content === null) continue;
   const text = entry.content.toString('utf8');
   if (secretPatterns.some((pattern) => pattern.test(text))) add('secret', entry, '疑似访问令牌或认证头');
@@ -72,6 +75,7 @@ for (const required of [
   'extension/media/yuanmeng-ai.svg',
   'extension/NOTICE.md',
   'extension/THIRD_PARTY_NOTICES.md',
+  'extension/RELEASE_NOTES.md',
 ]) {
   if (!byName.has(required)) findings.push({ category: 'missing-required', relativePath: required, detail: '发布包缺少必需文件' });
 }

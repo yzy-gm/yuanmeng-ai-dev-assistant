@@ -2,6 +2,7 @@ import { basename } from 'node:path';
 
 import * as vscode from 'vscode';
 
+import { diagnoseProjectEnvironment } from '../core/environment/health.js';
 import type { RegistryRecord, UiNode } from '../core/model.js';
 import type { WorkspaceContextManager } from './workspaces.js';
 
@@ -18,13 +19,30 @@ class EnvironmentProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     return element;
   }
 
-  getChildren(): vscode.TreeItem[] {
-    return this.#manager.list().map((context) => {
+  async getChildren(): Promise<vscode.TreeItem[]> {
+    return Promise.all(this.#manager.list().map(async (context) => {
+      const health = await diagnoseProjectEnvironment({
+        root: context.project.root,
+        projectInstanceId: context.project.projectInstanceId,
+        projectRootHash: context.project.projectRootHash,
+        status: context.status,
+        snapshot: context.snapshot,
+      });
       const item = new vscode.TreeItem(basename(context.project.root));
-      item.description = context.status.link.state;
-      item.tooltip = context.project.root;
+      const linkLabel = context.status.link.state === 'online' ? '已连接' : '未连接';
+      item.description = `${linkLabel} · ${health.overall}`;
+      item.tooltip = [
+        context.project.root,
+        `环境：${health.overall}`,
+        `CLI：${health.launchers.cli.state}`,
+        `MCP：${health.launchers.mcp.state}`,
+        `交付桥：${health.bridge.state}`,
+        `官方 UI 刷新：${health.official.refreshUiAvailable ? '可用' : '不可用'}`,
+        `官方代码打包：${health.official.buildAvailable ? '可用' : '不可用'}`,
+        ...health.issues.map((issue) => `${issue.message} 下一步：${issue.nextAction}`),
+      ].join('\n');
       return item;
-    });
+    }));
   }
 }
 

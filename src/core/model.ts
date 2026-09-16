@@ -33,6 +33,7 @@ export const CLI_CODES = [
   'AMBIGUOUS',
   'NOT_FOUND',
   'VALIDATION_FAILED',
+  'EVIDENCE_INSUFFICIENT',
   'USAGE_ERROR',
   'INTERNAL_ERROR',
 ] as const;

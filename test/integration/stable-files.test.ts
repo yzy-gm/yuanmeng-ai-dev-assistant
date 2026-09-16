@@ -29,6 +29,24 @@ afterEach(async () => {
 });
 
 describe('stable official export observation', () => {
+  it('aborts a pending stable export sample without waiting for the full timeout', async () => {
+    const root = await temporaryDirectory();
+    const controller = new AbortController();
+    const startedAt = Date.now();
+    const pending = waitForStableExport({
+      io: nodeFileIO,
+      paths: [join(root, 'missing.lua')],
+      baselineHashes: {},
+      sampleMilliseconds: 1_000,
+      stableSampleCount: 3,
+      totalTimeoutMilliseconds: 5_000,
+      signal: controller.signal,
+    } as never);
+    setTimeout(() => controller.abort(), 20);
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(Date.now() - startedAt).toBeLessThan(500);
+  });
+
   it('declares three 150 ms samples, a 2 second split window, and a 15 second deadline', () => {
     expect(DEFAULT_STABLE_EXPORT_OPTIONS).toEqual({
       sampleMilliseconds: 150,
@@ -111,6 +129,7 @@ describe('stable official export observation', () => {
       baselineHashes: { [target]: sha256Hex(content) },
       baselineSignatures: { [target]: baselineSignature },
       acceptUnchangedStableFiles: true,
+      requireSignatureChangeForUnchanged: true,
       sampleMilliseconds: 10,
       stableSampleCount: 2,
       splitCollectionMilliseconds: 20,
@@ -120,6 +139,59 @@ describe('stable official export observation', () => {
 
     expect(result.reasonCode).toBe('REFRESH_SUCCEEDED_UNCHANGED');
     expect(result.observedSignatureChange).toBe(true);
+  });
+
+  it('does not accept an unchanged old property file before the official command rewrites it', async () => {
+    const directory = await temporaryDirectory();
+    const target = join(directory, 'CustomProperty_9001_9207.lua');
+    const content = 'return {}\n';
+    await writeFile(target, content, 'utf8');
+    const initial = await nodeFileIO.stat(target);
+
+    await expect(waitForStableExport({
+      io: nodeFileIO,
+      paths: [target],
+      baselineHashes: { [target]: sha256Hex(content) },
+      baselineSignatures: { [target]: `${initial.size}:${initial.mtimeMs}` },
+      acceptUnchangedStableFiles: true,
+      requireSignatureChangeForUnchanged: true,
+      sampleMilliseconds: 10,
+      stableSampleCount: 2,
+      splitCollectionMilliseconds: 20,
+      totalTimeoutMilliseconds: 60,
+      validateContent: (_path, value) => { parseLuaLiteralDocument(value); },
+    })).rejects.toMatchObject({ code: 'EXPORT_TIMEOUT' });
+  });
+
+  it('accepts changed property content without requiring a signature-only rewrite', async () => {
+    const directory = await temporaryDirectory();
+    const target = join(directory, 'CustomProperty_9001_9207.lua');
+    const baseline = 'return { count = 1 }\n';
+    const changed = 'return { count = 2 }\n';
+    await writeFile(target, baseline, 'utf8');
+    const initial = await nodeFileIO.stat(target);
+    const writer = (async () => {
+      await delay(20);
+      await writeFile(target, changed, 'utf8');
+    })();
+
+    const result = await waitForStableExport({
+      io: nodeFileIO,
+      paths: [target],
+      baselineHashes: { [target]: sha256Hex(baseline) },
+      baselineSignatures: { [target]: `${initial.size}:${initial.mtimeMs}` },
+      acceptUnchangedStableFiles: true,
+      requireSignatureChangeForUnchanged: true,
+      sampleMilliseconds: 10,
+      stableSampleCount: 2,
+      splitCollectionMilliseconds: 20,
+      totalTimeoutMilliseconds: 200,
+      validateContent: (_path, value) => { parseLuaLiteralDocument(value); },
+    });
+    await writer;
+
+    expect(result.files[0]?.content).toBe(changed);
+    expect(result.reasonCode).toBe('REFRESH_SUCCEEDED');
   });
 
   it('still times out when the official command produces no UI files', async () => {
@@ -133,6 +205,36 @@ describe('stable official export observation', () => {
       splitCollectionMilliseconds: 20,
       totalTimeoutMilliseconds: 60,
     })).rejects.toMatchObject({ code: 'EXPORT_TIMEOUT' });
+  });
+
+  it('supports the interactive property-read timeout context after a delayed confirmation', async () => {
+    const directory = await temporaryDirectory();
+    const target = join(directory, 'CustomProperty_9001_9207.lua');
+    const writer = (async () => {
+      // The old 60 ms UI timeout would expire while the user is still filling
+      // the official property panel; the property workflow owns a longer wait.
+      await delay(90);
+      await writeFile(target, 'return {}\n', 'utf8');
+    })();
+
+    const result = await waitForStableExport({
+      io: nodeFileIO,
+      paths: [target],
+      baselineHashes: { [target]: null },
+      sampleMilliseconds: 10,
+      stableSampleCount: 2,
+      splitCollectionMilliseconds: 20,
+      totalTimeoutMilliseconds: 300,
+      timeoutError: {
+        message: '等待官方“获取元件自定义属性”导出超时。',
+        nextActions: ['确认已在官方属性面板点击确认。'],
+      },
+      validateContent: (_path, content) => { parseLuaLiteralDocument(content); },
+    });
+    await writer;
+
+    expect(result.files[0]?.path).toBe(target);
+    expect(result.files[0]?.content).toBe('return {}\n');
   });
 
   it('throws without replacing a caller-owned old snapshot when new content is invalid', async () => {

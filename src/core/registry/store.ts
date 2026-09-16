@@ -1,4 +1,5 @@
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { resolve } from 'node:path';
 
 import { ProductError } from '../errors.js';
 import { atomicWriteJson, nodeFileIO, type FileIO } from '../fs.js';
@@ -12,8 +13,15 @@ import {
   type RegistryValidity,
   type UiSnapshot,
 } from '../model.js';
+import type { SceneSnapshot } from '../scene/types.js';
 
 export type RegistryImportFormat = 'json' | 'yaml' | 'csv';
+
+export interface MutateRegistryOptions {
+  io?: FileIO;
+  signal?: AbortSignal;
+  commitGuard?(): void;
+}
 
 export interface RegistryFilters {
   kind?: RegistryKind;
@@ -64,6 +72,20 @@ function validation(message: string, cause?: unknown): never {
 
 function cloneDocument(document: RegistryDocument): RegistryDocument {
   return JSON.parse(JSON.stringify(document)) as RegistryDocument;
+}
+
+const registryMutationTails = new Map<string, Promise<void>>();
+
+async function enqueueRegistryMutation<T>(path: string, operation: () => Promise<T>): Promise<T> {
+  const key = resolve(path);
+  const previous = registryMutationTails.get(key) ?? Promise.resolve();
+  const result = previous.catch(() => undefined).then(operation);
+  const tail = result.then(() => undefined, () => undefined);
+  registryMutationTails.set(key, tail);
+  void tail.finally(() => {
+    if (registryMutationTails.get(key) === tail) registryMutationTails.delete(key);
+  });
+  return result;
 }
 
 function validateImportEnvelope(input: string, format: RegistryImportFormat): void {
@@ -382,6 +404,173 @@ export class RegistryStore {
     return cloneDocument(this.#document);
   }
 
+  syncSceneSnapshot(
+    snapshot: SceneSnapshot,
+    identity: { projectInstanceId: string; mapFingerprint: string | null; authoritative?: boolean },
+  ): RegistryDocument {
+    const instanceValues = new Set(snapshot.instances.map((instance) => instance.instanceId));
+    const typeValues = new Set(snapshot.instances.flatMap((instance) => (
+      instance.elementTypeId === null ? [] : [instance.elementTypeId]
+    )));
+    const observedSignals = snapshot.signalRegistry?.state === 'observed'
+      ? snapshot.signalRegistry.value
+      : [];
+    const observedLayerNames = snapshot.sceneMetadata?.layerName.state === 'observed'
+      ? [snapshot.sceneMetadata.layerName.value]
+      : [];
+    const observedSignalByName = new Map<string, (typeof observedSignals)[number]>();
+    const observedSignalCounts = new Map<string, number>();
+    for (const signal of observedSignals) {
+      observedSignalCounts.set(signal.name, (observedSignalCounts.get(signal.name) ?? 0) + 1);
+      if (!observedSignalByName.has(signal.name)) observedSignalByName.set(signal.name, signal);
+    }
+    const observedLayerNameSet = new Set(observedLayerNames);
+    const source: RegistryRecord['source'] = {
+      kind: 'source-scan',
+      relativePath: null,
+      sha256: snapshot.sourceSha256,
+      observedAt: snapshot.observedAt,
+      officialExtensionVersion: null,
+      evidence: 'STATIC_LOCAL',
+    };
+    const records = this.#document.records.map((record) => {
+      if (
+        record.projectInstanceId !== identity.projectInstanceId
+        || record.mapFingerprint !== identity.mapFingerprint
+        || record.validity === 'invalid'
+      ) return record;
+      if (record.kind === 'scene-instance' || record.kind === 'element-type') {
+        const present = record.kind === 'scene-instance' ? instanceValues.has(record.value) : typeValues.has(record.value);
+        if (present) return record.validity === 'suspected-change' ? { ...record, validity: 'pending' as const } : record;
+        return identity.authoritative === true ? { ...record, validity: 'suspected-change' as const } : record;
+      }
+      if (record.kind === 'signal'
+        && record.recordId.startsWith('auto-scene-signal-')
+        && snapshot.signalRegistry?.state === 'observed') {
+        const signal = observedSignalByName.get(record.value);
+        if (signal === undefined) return identity.authoritative === true ? { ...record, validity: 'suspected-change' as const } : record;
+        return {
+          ...record,
+          validity: record.validity === 'suspected-change' ? 'pending' as const : record.validity,
+          source,
+          notes: `场景根信号注册表只读发现；不透明引用数量 ${signal.unknownRefCount}；${(observedSignalCounts.get(signal.name) ?? 1) > 1 ? '同名记录存在歧义；' : ''}引用方向尚未校准。${signal.unknownFields === undefined ? '' : ` 未知字段摘要 ${signal.unknownFields.length} 条。`}`,
+        };
+      }
+      if (record.kind === 'scene-layer'
+        && record.recordId.startsWith('auto-scene-layer-name-')
+        && snapshot.sceneMetadata?.layerName.state === 'observed') {
+        if (!observedLayerNameSet.has(record.value)) return identity.authoritative === true ? { ...record, validity: 'suspected-change' as const } : record;
+        return {
+          ...record,
+          validity: record.validity === 'suspected-change' ? 'pending' as const : record.validity,
+          source,
+          notes: '场景元数据中的图层名称候选；当前值非图层 ID，不能作为 API 参数。',
+        };
+      }
+      return record;
+    });
+    const existingInstances = new Set(records.filter((record) => (
+      record.kind === 'scene-instance'
+      && record.projectInstanceId === identity.projectInstanceId
+      && record.mapFingerprint === identity.mapFingerprint
+    )).map((record) => record.value));
+    for (const instance of snapshot.instances) {
+      if (existingInstances.has(instance.instanceId)) continue;
+      records.push({
+        recordId: `auto-scene-${sha256Hex(`${identity.projectInstanceId}\0${identity.mapFingerprint ?? ''}\0${instance.instanceId}`)}`,
+        kind: 'scene-instance',
+        name: `场景元件 ${instance.instanceId}`,
+        value: instance.instanceId,
+        scope: identity.mapFingerprint === null ? 'workspace' : 'map',
+        projectInstanceId: identity.projectInstanceId,
+        mapFingerprint: identity.mapFingerprint,
+        layerId: null,
+        environment: 'unspecified',
+        validity: 'pending',
+        source,
+        lastConfirmedAt: null,
+        notes: `只读场景快照；类型 ${instance.elementTypeId ?? '未知'}；owner ${instance.ownerId ?? '无'}；${instance.variant}`,
+      });
+    }
+    const existingTypes = new Set(records.filter((record) => (
+      record.kind === 'element-type'
+      && record.projectInstanceId === identity.projectInstanceId
+      && record.mapFingerprint === identity.mapFingerprint
+    )).map((record) => record.value));
+    for (const typeId of [...typeValues].sort((left, right) => left.localeCompare(right, 'en'))) {
+      if (existingTypes.has(typeId)) continue;
+      records.push({
+        recordId: `auto-element-type-${sha256Hex(`${identity.projectInstanceId}\0${identity.mapFingerprint ?? ''}\0${typeId}`)}`,
+        kind: 'element-type',
+        name: `元件类型 ${typeId}`,
+        value: typeId,
+        scope: identity.mapFingerprint === null ? 'workspace' : 'map',
+        projectInstanceId: identity.projectInstanceId,
+        mapFingerprint: identity.mapFingerprint,
+        layerId: null,
+        environment: 'unspecified',
+        validity: 'pending',
+        source,
+        lastConfirmedAt: null,
+        notes: '由只读场景快照发现；未自动升级为正式或已确认。',
+      });
+    }
+    const observedByName = new Map<string, Array<(typeof observedSignals)[number]>>();
+    for (const signal of observedSignals) {
+      const values = observedByName.get(signal.name) ?? [];
+      values.push(signal);
+      observedByName.set(signal.name, values);
+    }
+    for (const [name, signals] of [...observedByName.entries()].sort(([left], [right]) => left.localeCompare(right, 'zh-CN'))) {
+      for (const [index, signal] of signals.entries()) {
+        const canonicalId = `auto-scene-signal-${sha256Hex(`${identity.projectInstanceId}\0${identity.mapFingerprint ?? ''}\0${name}`)}`;
+        const recordId = index === 0 ? canonicalId : `${canonicalId}-duplicate-${index}`;
+        if (records.some((record) => record.recordId === recordId)) continue;
+        records.push({
+          recordId,
+          kind: 'signal',
+          name,
+          value: name,
+          scope: identity.mapFingerprint === null ? 'workspace' : 'map',
+          projectInstanceId: identity.projectInstanceId,
+          mapFingerprint: identity.mapFingerprint,
+          layerId: null,
+          environment: 'unspecified',
+          validity: 'pending',
+          source,
+          lastConfirmedAt: null,
+          notes: `场景根信号注册表只读发现；记录序号 ${index + 1}/${signals.length}；不透明引用数量 ${signal.unknownRefCount}；${signals.length > 1 ? '同名记录存在歧义；' : ''}引用方向尚未校准。${signal.unknownFields === undefined ? '' : ` 未知字段摘要 ${signal.unknownFields.length} 条。`}`,
+        });
+      }
+    }
+    const existingLayerNames = new Set(records.filter((record) => (
+      record.kind === 'scene-layer'
+      && record.projectInstanceId === identity.projectInstanceId
+      && record.mapFingerprint === identity.mapFingerprint
+    )).map((record) => record.value));
+    for (const layerName of observedLayerNames.sort((left, right) => left.localeCompare(right, 'zh-CN'))) {
+      if (existingLayerNames.has(layerName)) continue;
+      records.push({
+        recordId: `auto-scene-layer-name-${sha256Hex(`${identity.projectInstanceId}\0${identity.mapFingerprint ?? ''}\0${layerName}`)}`,
+        kind: 'scene-layer',
+        name: layerName,
+        value: layerName,
+        scope: identity.mapFingerprint === null ? 'workspace' : 'map',
+        projectInstanceId: identity.projectInstanceId,
+        mapFingerprint: identity.mapFingerprint,
+        layerId: null,
+        environment: 'unspecified',
+        validity: 'pending',
+        source,
+        lastConfirmedAt: null,
+        notes: '场景元数据中的图层名称候选；当前值非图层 ID，不能作为 API 参数。',
+      });
+    }
+    this.#document = { schemaVersion: 1, records };
+    validateRegistryDocument(this.#document);
+    return cloneDocument(this.#document);
+  }
+
   markSuspectedChanges(snapshot: UiSnapshot): RegistryDocument {
     const present = new Set(snapshot.nodes.map((node) => node.id));
     this.#document = {
@@ -423,11 +612,48 @@ export class RegistryStore {
     this.#document = cloneDocument(preview.document);
   }
 
-  async save(): Promise<void> {
+  async save(options: { signal?: AbortSignal; commitGuard?(): void } = {}): Promise<void> {
     if (this.#path === null) {
       validation('内存注册中心没有可保存路径。');
     }
-    await atomicWriteJson(this.#io, this.#path, this.#document, validateRegistryDocument);
+    const assertCommit = (): void => {
+      if (options.signal?.aborted === true) {
+        if (options.signal.reason !== undefined) throw options.signal.reason;
+        const error = new Error('注册中心写入已取消。');
+        error.name = 'AbortError';
+        throw error;
+      }
+      options.commitGuard?.();
+    };
+    let previous: string | null;
+    try {
+      previous = await this.#io.readFile(this.#path, 'utf8');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      previous = null;
+    }
+    const attempted = stableJson(this.#document);
+    assertCommit();
+    try {
+      await atomicWriteJson(this.#io, this.#path, this.#document, validateRegistryDocument, { commitGuard: assertCommit });
+      assertCommit();
+    } catch (error) {
+      let current: string | null = null;
+      try {
+        current = await this.#io.readFile(this.#path, 'utf8');
+      } catch (readError) {
+        if ((readError as NodeJS.ErrnoException).code !== 'ENOENT') throw readError;
+      }
+      if (current === attempted) {
+        if (previous === null) await this.#io.unlink(this.#path);
+        else {
+          const previousDocument: unknown = JSON.parse(previous);
+          validateRegistryDocument(previousDocument);
+          await atomicWriteJson(this.#io, this.#path, previousDocument, validateRegistryDocument);
+        }
+      }
+      throw error;
+    }
   }
 
   static propertyEligibility(input: PropertyEligibilityInput): PropertyEligibility {
@@ -463,4 +689,44 @@ export class RegistryStore {
       ? { allowed: true, warning: '地图身份未由官方确认', layer, instance }
       : { allowed: false, warning: '地图身份未由官方确认', reason: '未确认地图身份时仅允许同工程、用户登记的 test/unspecified 单一目标。' };
   }
+}
+
+/**
+ * Serializes read-modify-write registry updates for one on-disk registry.
+ * Every queued operation reopens the latest committed document, so independent
+ * UI and scene refreshes cannot overwrite each other's records with stale reads.
+ */
+export async function mutateRegistry(
+  path: string,
+  mutation: (store: RegistryStore) => void | Promise<void>,
+  options: MutateRegistryOptions = {},
+): Promise<RegistryDocument> {
+  return enqueueRegistryMutation(path, async () => {
+    const io = options.io ?? nodeFileIO;
+    let store: RegistryStore;
+    try {
+      store = await RegistryStore.open(path, io);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      store = new RegistryStore({ schemaVersion: 1, records: [] }, path, io);
+    }
+    await mutation(store);
+    await store.save({
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      ...(options.commitGuard === undefined ? {} : { commitGuard: options.commitGuard }),
+    });
+    return { schemaVersion: 1, records: store.list() };
+  });
+}
+
+/** Commits an optimistic import in the same per-file lane as automatic refreshes. */
+export async function commitRegistryImportTransaction(
+  path: string,
+  preview: RegistryImportPreview,
+  io: FileIO = nodeFileIO,
+): Promise<void> {
+  return enqueueRegistryMutation(path, async () => {
+    const store = await RegistryStore.open(path, io);
+    await store.commitImport(preview);
+  });
 }

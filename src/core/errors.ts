@@ -32,13 +32,25 @@ export type ErrorCode =
   | 'PLAYER_ROUTING_UNCONFIRMED'
   | 'GENERATED_FILE_PROTECTED'
   | 'CONFIRMATION_REQUIRED'
-  | 'HASH_CONFLICT';
+  | 'HASH_CONFLICT'
+  | 'UNSUPPORTED_SCENE_CONTAINER'
+  | 'SCENE_INTEGRITY_FAILED'
+  | 'SCENE_WIRE_INVALID'
+  | 'UNSUPPORTED_SCENE_SCHEMA'
+  | 'SCENE_LIMIT_EXCEEDED'
+  | 'SCENE_SOURCE_CONFLICT'
+  | 'SCENE_SOURCE_UNSTABLE'
+  | 'UI_GEOMETRY_EVIDENCE_INSUFFICIENT'
+  | 'UI_RUNTIME_EVIDENCE_INSUFFICIENT'
+  | 'SCENE_EVIDENCE_INSUFFICIENT'
+  | 'SCENE_CAPABILITY_MISMATCH';
 
 export interface ProductError extends Error {
   readonly code: ErrorCode;
   readonly nextActions: readonly string[];
   readonly evidence: EvidenceLevel;
   readonly cause?: unknown;
+  readonly details?: Readonly<Record<string, unknown>>;
 }
 
 export interface ProductErrorConstructor {
@@ -48,6 +60,7 @@ export interface ProductErrorConstructor {
     nextActions: readonly string[],
     evidence: EvidenceLevel,
     cause?: unknown,
+    details?: Readonly<Record<string, unknown>>,
   ): ProductError;
 }
 
@@ -55,6 +68,7 @@ export const ProductError: ProductErrorConstructor = class ProductErrorImplement
   readonly code: ErrorCode;
   readonly nextActions: readonly string[];
   readonly evidence: EvidenceLevel;
+  readonly details?: Readonly<Record<string, unknown>>;
 
   constructor(
     code: ErrorCode,
@@ -62,12 +76,14 @@ export const ProductError: ProductErrorConstructor = class ProductErrorImplement
     nextActions: readonly string[],
     evidence: EvidenceLevel,
     cause?: unknown,
+    details?: Readonly<Record<string, unknown>>,
   ) {
     super(message);
     this.name = 'ProductError';
     this.code = code;
     this.nextActions = nextActions;
     this.evidence = evidence;
+    if (details !== undefined) this.details = { ...details };
     if (cause !== undefined) {
       Object.defineProperty(this, 'cause', {
         configurable: true,

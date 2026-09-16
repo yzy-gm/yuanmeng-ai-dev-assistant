@@ -10,16 +10,6 @@ interface CompanionApi {
   refreshUi(root: string): Promise<void>;
 }
 
-async function waitForDiagnostic(uri: vscode.Uri, code: string): Promise<vscode.Diagnostic> {
-  const deadline = Date.now() + 5_000;
-  while (Date.now() <= deadline) {
-    const found = vscode.languages.getDiagnostics(uri).find((item) => item.code === code);
-    if (found !== undefined) return found;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  throw new Error(`diagnostic ${code} was not published`);
-}
-
 function hoverText(hover: vscode.Hover): string {
   return hover.contents.map((content) => (
     typeof content === 'string' ? content : content instanceof vscode.MarkdownString ? content.value : content.value
@@ -53,8 +43,11 @@ export const languageFeatureTests: ExtensionTestCase[] = [{
       const uri = document.uri;
       const position = new vscode.Position(0, 19);
 
-      const diagnostic = await waitForDiagnostic(uri, 'PENDING_ID_REFERENCE');
-      assert.equal(diagnostic.source, '元梦 AI');
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      assert.deepEqual(
+        vscode.languages.getDiagnostics(uri).filter((item) => item.source === '元梦 AI'),
+        [],
+      );
 
       const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
         'vscode.executeHoverProvider', uri, position,
@@ -73,22 +66,6 @@ export const languageFeatureTests: ExtensionTestCase[] = [{
       assert.ok(lens?.command?.title.includes('unspecified/pending'));
       assert.ok(lens.command.title.includes('workspace'));
 
-      const actions = await vscode.commands.executeCommand<Array<vscode.CodeAction | vscode.Command>>(
-        'vscode.executeCodeActionProvider', uri, diagnostic.range,
-      );
-      const quickFixes = actions.filter((action): action is vscode.CodeAction => (
-        action instanceof vscode.CodeAction
-        && (
-          action.command?.command === 'yuanmengAi.openRegistryRecord'
-          || action.command?.command === 'yuanmengAi.searchApi'
-        )
-      ));
-      assert.ok(quickFixes.length > 0);
-      assert.ok(quickFixes.every((action) => action.edit === undefined));
-      assert.ok(quickFixes.every((action) => (
-        action.command?.command === 'yuanmengAi.openRegistryRecord'
-        || action.command?.command === 'yuanmengAi.searchApi'
-      )));
     } finally {
       fakeOfficial.dispose();
     }

@@ -72,7 +72,7 @@ describe('tokenized refresh request queue', () => {
     expect(result).toMatchObject({
       status: 'completed',
       code: 'OK',
-      message: '结构无变化，继续使用现有快照。',
+      message: '已检查 UI，内容未变化；现有快照仍为最新。',
     });
   });
 

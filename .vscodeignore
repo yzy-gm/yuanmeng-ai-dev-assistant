@@ -15,7 +15,13 @@ work/**
 *.map
 out/extension-tests.cjs
 *.ts
+**/.yuanmeng-inspector/**
+**/LayerData.dat
+**/LayerData-Auto.dat
+**/LayerData.pbin
+**/Resource/**/*.pbin
 eslint.config.mjs
 esbuild.mjs
 package-lock.json
 tsconfig*.json
+AGENTS.md
