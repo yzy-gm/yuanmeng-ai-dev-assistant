@@ -12,12 +12,30 @@ import luaparse, {
 } from 'luaparse';
 
 import { ProductError } from '../errors.js';
-import type { RegistryDocument, RegistryRecord } from '../model.js';
+import type { RegistryDocument, RegistryKind, RegistryRecord } from '../model.js';
 import { decodeLuaStringLiteral } from './literal-parser.js';
 
 export type LuaSide = 'client' | 'server' | 'shared' | 'unknown';
 export type ReferenceConfidence = 'confirmed' | 'inferred' | 'candidate';
-export type WhereUsedKind = 'id' | 'signal' | 'ui';
+export type WhereUsedKind = 'id' | 'signal' | 'ui' | 'scene-instance' | 'element-type' | 'scene-layer';
+export type LuaApiIdDomain =
+  | 'scene-instance'
+  | 'element-type'
+  | 'scene-layer'
+  | 'scene-group'
+  | 'ui-control'
+  | 'player'
+  | 'character'
+  | 'creature'
+  | 'prop'
+  | 'image'
+  | 'effect'
+  | 'item'
+  | 'camera'
+  | 'audio'
+  | 'model'
+  | 'resource'
+  | 'unknown';
 
 export interface LuaSourceFile {
   path: string;
@@ -26,7 +44,9 @@ export interface LuaSourceFile {
 
 export interface LuaApiCallKnowledge {
   qualifiedName: string;
+  /** 旧插件兼容字段；新官方索引应使用带域信息的 idParameterDomains。 */
   idParameterIndexes?: readonly number[];
+  idParameterDomains?: readonly { parameterIndex: number; domain: LuaApiIdDomain }[];
   signalParameterIndexes?: readonly number[];
   side?: Exclude<LuaSide, 'unknown'>;
 }
@@ -56,6 +76,8 @@ export interface LuaLiteralReference extends LuaSourceLocation {
 
 export interface LuaIdReference extends LuaLiteralReference {
   kind: 'id' | 'ui';
+  registryKind: RegistryKind | null;
+  idDomain?: LuaApiIdDomain;
   confidence: ReferenceConfidence;
   evidence:
     | { source: 'registry'; recordId: string }
@@ -83,11 +105,14 @@ export interface LuaCallReference extends LuaSourceLocation {
   argumentCount: number;
   arguments: LuaCallArgument[];
   side: LuaSideEvidence;
+  /** 仅在 AST 能证明回调用“不等于实例 ID 则立即 return”分流时写入。 */
+  sceneInstanceGuards?: string[];
 }
 
 export interface LuaCallArgument extends LuaSourceLocation {
   literalType: 'string' | 'number' | 'boolean' | 'nil' | 'other';
   value: string | number | boolean | null;
+  qualifiedName: string | null;
 }
 
 export interface LuaRequireReference extends LuaSourceLocation {
@@ -140,14 +165,21 @@ interface FileContext {
   index: LuaSourceIndex;
   idReferences: Map<string, LuaIdReference>;
   signalReferences: Map<string, LuaSignalReference>;
+  numericConstants: ReadonlyMap<string, string>;
+  namedFunctions: ReadonlyMap<string, FunctionDeclaration>;
 }
 
 const MAX_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 64 * 1024 * 1024;
 const MAX_AST_NODES = 500_000;
 
-function fail(code: 'VALIDATION_FAILED' | 'INVALID_LUA_SYNTAX' | 'LUA_LIMIT_EXCEEDED', message: string, cause?: unknown): never {
-  throw new ProductError(code, message, ['修正 Lua 源文件或索引配置后重试。'], 'STATIC_LOCAL', cause);
+function fail(
+  code: 'VALIDATION_FAILED' | 'INVALID_LUA_SYNTAX' | 'LUA_LIMIT_EXCEEDED',
+  message: string,
+  cause?: unknown,
+  details?: Readonly<Record<string, unknown>>,
+): never {
+  throw new ProductError(code, message, ['修正 Lua 源文件或索引配置后重试。'], 'STATIC_LOCAL', cause, details);
 }
 
 function normalizePath(path: string): string {
@@ -165,7 +197,7 @@ function normalizePath(path: string): string {
 
 function location(context: FileContext, node: RangedNode): LuaSourceLocation {
   if (node.loc === undefined || node.range === undefined) {
-    fail('INVALID_LUA_SYNTAX', `Lua AST 缺少来源范围：${context.path}`);
+    fail('INVALID_LUA_SYNTAX', `Lua AST 缺少来源范围：${context.path}`, undefined, { file: context.path });
   }
   const line = node.loc.start.line;
   return {
@@ -246,6 +278,7 @@ function addRegistryReference(context: FileContext, node: RangedNode, value: str
     }
     addIdReference(context, node, value, {
       kind: record.kind === 'ui-control' ? 'ui' : 'id',
+      registryKind: record.kind,
       confidence: confidenceFor(record),
       evidence: { source: 'registry', recordId: record.recordId },
     });
@@ -256,13 +289,19 @@ function addIdReference(
   context: FileContext,
   node: RangedNode,
   value: string,
-  details: Pick<LuaIdReference, 'kind' | 'confidence' | 'evidence'>,
+  details: Pick<LuaIdReference, 'kind' | 'registryKind' | 'confidence' | 'evidence'> & Pick<LuaIdReference, 'idDomain'>,
 ): void {
-  const key = referenceKey(context.path, node, value);
-  const existing = context.idReferences.get(key);
-  if (existing?.confidence === 'confirmed' && details.confidence !== 'confirmed') {
+  const baseKey = referenceKey(context.path, node, value);
+  const registryPrefix = `${baseKey}\0registry:`;
+  if (details.evidence.source !== 'registry') {
+    if ([...context.idReferences.entries()].some(([key, reference]) => (
+      key.startsWith(registryPrefix) && reference.confidence === 'confirmed'
+    ))) return;
+    context.idReferences.set(baseKey, { ...location(context, node), value, ...details });
     return;
   }
+  if (details.confidence === 'confirmed') context.idReferences.delete(baseKey);
+  const key = `${registryPrefix}${details.evidence.recordId}`;
   context.idReferences.set(key, { ...location(context, node), value, ...details });
 }
 
@@ -272,16 +311,26 @@ function addSignalReference(
   value: string,
   details: Pick<LuaSignalReference, 'kind' | 'role' | 'confidence' | 'evidence'>,
 ): void {
-  const key = referenceKey(context.path, node, value);
-  const existing = context.signalReferences.get(key);
-  const keepRegistryEvidence = existing?.evidence.source === 'registry';
-  context.signalReferences.set(key, {
+  const baseKey = referenceKey(context.path, node, value);
+  const registryPrefix = `${baseKey}\0registry:`;
+  const registryEntries = [...context.signalReferences.entries()].filter(([key]) => key.startsWith(registryPrefix));
+  if (details.evidence.source !== 'registry' && registryEntries.length > 0) {
+    for (const [key, reference] of registryEntries) {
+      context.signalReferences.set(key, { ...reference, role: details.role });
+    }
+    return;
+  }
+  if (details.evidence.source !== 'registry') {
+    context.signalReferences.set(baseKey, { ...location(context, node), value, ...details });
+    return;
+  }
+  const existing = context.signalReferences.get(baseKey) ?? registryEntries[0]?.[1];
+  context.signalReferences.delete(baseKey);
+  context.signalReferences.set(`${registryPrefix}${details.evidence.recordId}`, {
     ...location(context, node),
     value,
-    kind: 'signal',
-    role: details.role === 'candidate' && existing !== undefined ? existing.role : details.role,
-    confidence: keepRegistryEvidence ? existing.confidence : details.confidence,
-    evidence: keepRegistryEvidence ? existing.evidence : details.evidence,
+    ...details,
+    role: existing === undefined || existing.role === 'candidate' ? details.role : existing.role,
   });
 }
 
@@ -304,33 +353,186 @@ function callArguments(call: LuaCallExpression): readonly Expression[] {
 
 function callArgument(context: FileContext, argument: Expression): LuaCallArgument {
   if (argument.type === 'StringLiteral') {
-    return { ...location(context, argument), literalType: 'string', value: decodeLuaStringLiteral(argument.raw) };
+    return { ...location(context, argument), literalType: 'string', value: decodeLuaStringLiteral(argument.raw), qualifiedName: null };
   }
   if (argument.type === 'NumericLiteral') {
-    return { ...location(context, argument), literalType: 'number', value: argument.value };
+    return { ...location(context, argument), literalType: 'number', value: argument.value, qualifiedName: null };
   }
   if (argument.type === 'BooleanLiteral') {
-    return { ...location(context, argument), literalType: 'boolean', value: argument.value };
+    return { ...location(context, argument), literalType: 'boolean', value: argument.value, qualifiedName: null };
   }
   if (argument.type === 'NilLiteral') {
-    return { ...location(context, argument), literalType: 'nil', value: null };
+    return { ...location(context, argument), literalType: 'nil', value: null, qualifiedName: null };
   }
-  return { ...location(context, argument), literalType: 'other', value: null };
+  return { ...location(context, argument), literalType: 'other', value: null, qualifiedName: expressionName(argument) };
+}
+
+function forEachNode(root: unknown, visitor: (node: Node) => void): void {
+  const stack: unknown[] = [root];
+  const seen = new Set<object>();
+  while (stack.length > 0) {
+    const value = stack.pop();
+    if (typeof value !== 'object' || value === null || seen.has(value)) continue;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const entry of value) stack.push(entry);
+      continue;
+    }
+    const record = value as Record<string, unknown>;
+    if (typeof record.type === 'string') visitor(value as Node);
+    for (const [key, entry] of Object.entries(record)) {
+      if (key !== 'loc' && key !== 'range' && key !== 'comments') stack.push(entry);
+    }
+  }
+}
+
+function sourceDeclarations(chunk: Chunk): {
+  numericConstants: ReadonlyMap<string, string>;
+  namedFunctions: ReadonlyMap<string, FunctionDeclaration>;
+} {
+  const numericConstants = new Map<string, string>();
+  const namedFunctions = new Map<string, FunctionDeclaration>();
+  forEachNode(chunk, (node) => {
+    if (node.type === 'FunctionDeclaration') {
+      const name = functionName(node);
+      if (name !== '<anonymous>') namedFunctions.set(name, node);
+      return;
+    }
+    if (node.type !== 'LocalStatement' && node.type !== 'AssignmentStatement') return;
+    const candidate = node as Node & { variables?: Expression[]; init?: Expression[] };
+    for (let index = 0; index < (candidate.variables?.length ?? 0); index += 1) {
+      const variable = candidate.variables?.[index];
+      const initial = candidate.init?.[index];
+      if (variable?.type === 'Identifier' && initial?.type === 'NumericLiteral' && Number.isSafeInteger(initial.value)) {
+        numericConstants.set(variable.name, initial.raw);
+      }
+    }
+  });
+  return { numericConstants, namedFunctions };
+}
+
+function guardOperand(
+  expression: Expression,
+  parameterName: string,
+  numericConstants: ReadonlyMap<string, string>,
+): { kind: 'parameter' } | { kind: 'id'; value: string } | null {
+  if (expression.type === 'Identifier') {
+    if (expression.name === parameterName) return { kind: 'parameter' };
+    const value = numericConstants.get(expression.name);
+    return value === undefined ? null : { kind: 'id', value };
+  }
+  return expression.type === 'NumericLiteral' && Number.isSafeInteger(expression.value)
+    ? { kind: 'id', value: expression.raw }
+    : null;
+}
+
+function idsRejectedByCondition(
+  condition: Expression,
+  parameterName: string,
+  numericConstants: ReadonlyMap<string, string>,
+): string[] {
+  if (condition.type === 'LogicalExpression' && condition.operator === 'or') {
+    return [
+      ...idsRejectedByCondition(condition.left, parameterName, numericConstants),
+      ...idsRejectedByCondition(condition.right, parameterName, numericConstants),
+    ];
+  }
+  if (condition.type !== 'BinaryExpression' || condition.operator !== '~=') return [];
+  const left = guardOperand(condition.left, parameterName, numericConstants);
+  const right = guardOperand(condition.right, parameterName, numericConstants);
+  if (left?.kind === 'parameter' && right?.kind === 'id') return [right.value];
+  if (right?.kind === 'parameter' && left?.kind === 'id') return [left.value];
+  return [];
+}
+
+function registeredCallback(context: FileContext, arguments_: readonly Expression[]): FunctionDeclaration | undefined {
+  const callbackExpression = arguments_[1];
+  return callbackExpression?.type === 'FunctionDeclaration'
+    ? callbackExpression
+    : callbackExpression?.type === 'Identifier'
+      ? context.namedFunctions.get(callbackExpression.name)
+      : undefined;
+}
+
+function sceneInstanceGuards(context: FileContext, arguments_: readonly Expression[]): string[] {
+  const callback = registeredCallback(context, arguments_);
+  const parameter = callback?.parameters[1];
+  if (callback === undefined || parameter?.type !== 'Identifier') return [];
+  const ids = new Set<string>();
+  forEachNode(callback.body, (node) => {
+    if (node.type !== 'IfStatement') return;
+    const clauses = (node as Node & { clauses?: Array<{ condition?: Expression; body?: Node[] }> }).clauses ?? [];
+    for (const clause of clauses) {
+      if (clause.condition === undefined || clause.body?.length !== 1 || clause.body[0]?.type !== 'ReturnStatement') continue;
+      for (const id of idsRejectedByCondition(clause.condition, parameter.name, context.numericConstants)) ids.add(id);
+    }
+  });
+  return [...ids].sort((left, right) => left.localeCompare(right, 'en'));
+}
+
+function isSystemServerCheck(expression: Expression): boolean {
+  if (expression.type !== 'CallExpression') return false;
+  const name = expressionName(expression.base);
+  return name === 'System:IsServer' || name === 'System.IsServer';
+}
+
+/**
+ * A top-level `if not System:IsServer() ... then return end` proves that the
+ * callback's observable body is server-only. `or` is safe here because every
+ * non-server execution necessarily satisfies the left operand and returns;
+ * `and` is intentionally not inferred because some client paths could remain.
+ */
+function rejectsEveryNonServerExecution(condition: Expression): boolean {
+  if (condition.type === 'UnaryExpression' && condition.operator === 'not') {
+    return isSystemServerCheck(condition.argument);
+  }
+  return condition.type === 'LogicalExpression'
+    && condition.operator === 'or'
+    && (rejectsEveryNonServerExecution(condition.left) || rejectsEveryNonServerExecution(condition.right));
+}
+
+function registeredCallbackSide(context: FileContext, arguments_: readonly Expression[]): LuaSideEvidence | null {
+  const callback = registeredCallback(context, arguments_);
+  if (callback === undefined) return null;
+  for (const statement of callback.body) {
+    if (statement.type !== 'IfStatement') continue;
+    const clauses = (statement as Node & { clauses?: Array<{ condition?: Expression; body?: Node[] }> }).clauses ?? [];
+    for (const clause of clauses) {
+      if (
+        clause.condition !== undefined
+        && clause.body?.length === 1
+        && clause.body[0]?.type === 'ReturnStatement'
+        && rejectsEveryNonServerExecution(clause.condition)
+      ) {
+        return { value: 'server', evidence: 'callback-guard:not System:IsServer() then return' };
+      }
+    }
+  }
+  return null;
 }
 
 function processCall(context: FileContext, node: LuaCallExpression): void {
   const qualifiedName = expressionName(node.base) ?? '<dynamic>';
   const api = context.apiByCall.get(qualifiedName);
   const args = callArguments(node);
-  const side = api?.side === undefined
+  let side = api?.side === undefined
     ? context.side
     : { value: api.side, evidence: `api:${qualifiedName}` } satisfies LuaSideEvidence;
+  if (
+    side.value === 'unknown'
+    && (qualifiedName === 'System:RegisterEvent' || qualifiedName === 'System.RegisterEvent')
+  ) {
+    side = registeredCallbackSide(context, args) ?? side;
+  }
   context.index.calls.push({
     ...location(context, node),
     qualifiedName,
     argumentCount: args.length,
     arguments: args.map((argument) => callArgument(context, argument)),
     side,
+    ...((qualifiedName === 'System:RegisterEvent' || qualifiedName === 'System.RegisterEvent')
+      ? { sceneInstanceGuards: sceneInstanceGuards(context, args) }
+      : {}),
   });
   if (qualifiedName === 'require' && args[0]?.type === 'StringLiteral') {
     context.index.requires.push({
@@ -338,12 +540,17 @@ function processCall(context: FileContext, node: LuaCallExpression): void {
       module: decodeLuaStringLiteral(args[0].raw),
     });
   }
-  for (const parameterIndex of api?.idParameterIndexes ?? []) {
+  const idParameters = api?.idParameterDomains
+    ?? api?.idParameterIndexes?.map((parameterIndex) => ({ parameterIndex, domain: 'unknown' as const }))
+    ?? [];
+  for (const { parameterIndex, domain } of idParameters) {
     const argument = args[parameterIndex];
     const value = argument === undefined ? null : literalValue(argument);
     if (argument !== undefined && value !== null) {
       addIdReference(context, argument, value, {
         kind: 'id',
+        registryKind: null,
+        idDomain: domain,
         confidence: 'inferred',
         evidence: { source: 'api', qualifiedName, parameterIndex },
       });
@@ -393,6 +600,7 @@ function processConfigField(context: FileContext, node: TableKeyString): void {
   if (context.configuredIdFields.has(node.key.name)) {
     addIdReference(context, node.value, value, {
       kind: 'id',
+      registryKind: null,
       confidence: 'candidate',
       evidence: { source: 'config', field: node.key.name },
     });
@@ -457,22 +665,28 @@ function visit(context: FileContext, node: Node, visited: Set<object>, count: { 
   }
 }
 
-function parseFile(file: LuaSourceFile): { chunk: Chunk; path: string; side: LuaSideEvidence } {
+function parseFile(file: LuaSourceFile): {
+  chunk: Chunk;
+  path: string;
+  side: LuaSideEvidence;
+  source: string;
+} {
   const path = normalizePath(file.path);
   if (Buffer.byteLength(file.source, 'utf8') > MAX_FILE_BYTES) {
-    fail('LUA_LIMIT_EXCEEDED', `Lua 文件超过索引大小上限：${path}`);
+    fail('LUA_LIMIT_EXCEEDED', `Lua 文件超过索引大小上限：${path}`, undefined, { file: path });
   }
+  const source = file.source.startsWith('\uFEFF') ? file.source.slice(1) : file.source;
   try {
-    const chunk = luaparse.parse(file.source, {
+    const chunk = luaparse.parse(source, {
       comments: true,
       locations: true,
       ranges: true,
       luaVersion: '5.3',
       encodingMode: 'none',
     });
-    return { chunk, path, side: sideFromComments(chunk.comments ?? []) };
+    return { chunk, path, side: sideFromComments(chunk.comments ?? []), source };
   } catch (error) {
-    fail('INVALID_LUA_SYNTAX', `Lua 语法无效：${path}`, error);
+    fail('INVALID_LUA_SYNTAX', `Lua 语法无效：${path}`, error, { file: path });
   }
 }
 
@@ -520,10 +734,11 @@ export function buildLuaSourceIndex(
       fail('VALIDATION_FAILED', `Lua 索引文件路径重复：${parsed.path}`);
     }
     index.files.push({ path: parsed.path, side: parsed.side });
+    const declarations = sourceDeclarations(parsed.chunk);
     const context: FileContext = {
       path: parsed.path,
-      source: file.source,
-      lines: file.source.split(/\r?\n/u),
+      source: parsed.source,
+      lines: parsed.source.split(/\r?\n/u),
       side: parsed.side,
       registryByValue,
       apiByCall,
@@ -531,6 +746,7 @@ export function buildLuaSourceIndex(
       index,
       idReferences,
       signalReferences,
+      ...declarations,
     };
     const count = { value: 0 };
     for (const statement of parsed.chunk.body) {
@@ -561,9 +777,13 @@ export function whereUsed(
   const ids = kind === 'signal'
     ? []
     : index.idReferences.filter((reference) => (
-      reference.value === value && (kind !== 'ui' || reference.kind === 'ui')
+      reference.value === value
+      && (kind !== 'ui' || reference.kind === 'ui')
+      && (kind !== 'scene-instance' || reference.registryKind === 'scene-instance')
+      && (kind !== 'element-type' || reference.registryKind === 'element-type')
+      && (kind !== 'scene-layer' || reference.registryKind === 'scene-layer')
     ));
-  const signals = kind === 'id' || kind === 'ui'
+  const signals = kind !== undefined && kind !== 'signal'
     ? []
     : index.signalReferences.filter((reference) => reference.value === value);
   const results = [...ids, ...signals];
