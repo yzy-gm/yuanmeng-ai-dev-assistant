@@ -1,12 +1,19 @@
 import { cliLauncherTests } from './cli-launcher.test.js';
 import { buildCommandTests } from './build-command.test.js';
 import { hostNoiseProbeTests } from './host-noise-probe.test.js';
+import { gameplayTests } from './gameplay.test.js';
+import { gameplayViewTests } from './gameplay-view.test.js';
 import { languageFeatureTests } from './language-features.test.js';
 import { m1UiTests } from './m1-ui.test.js';
 import { officialSchemaGateTests } from './official-schema-gate.test.js';
 import { patchConfirmationTests } from './patch-confirmation.test.js';
 import { propertyCommandTests } from './property-command.test.js';
 import { runtimeCapabilityTests } from './runtime-capabilities.test.js';
+import { sceneProbeEvidenceTests } from './scene-probe-evidence.test.js';
+import { sceneTreeTests } from './scene-tree.test.js';
+import { sceneWorkflowViewTests } from './scene-workflow-views.test.js';
+import { workflowTests } from './workflow.test.js';
+import { mcpProviderDeliveryTests } from './mcp-provider-delivery.test.js';
 
 export interface ExtensionTestCase {
   name: string;
@@ -22,12 +29,19 @@ export async function run(): Promise<void> {
     : [];
   const cases = [
     ...buildCommandTests,
+    ...gameplayTests,
+    ...gameplayViewTests,
     ...m1UiTests,
     ...languageFeatureTests,
     ...runtimeCapabilityTests,
     ...cliLauncherTests,
     ...patchConfirmationTests,
     ...propertyCommandTests,
+    ...sceneProbeEvidenceTests,
+    ...sceneTreeTests,
+    ...sceneWorkflowViewTests,
+    ...workflowTests,
+    ...mcpProviderDeliveryTests,
     ...optionalHostNoiseProbes,
     ...optionalSchemaGateTests,
   ]
