@@ -4,12 +4,14 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { buildUiSnapshot } from '../../src/core/ui/index.js';
 import type { InspectorStatus, RegistryDocument } from '../../src/core/model.js';
 import { sha256Hex } from '../../src/core/hash.js';
 import { createOrRefreshCliLauncher } from '../../src/extension/cli-launcher.js';
+import { writeLiveOfficialConnection } from '../../src/core/status/live-connection.js';
+import { nodeFileIO } from '../../src/core/fs.js';
 
 const execFileAsync = promisify(execFile);
 const repoRoot = resolve(import.meta.dirname, '..', '..');
@@ -63,23 +65,26 @@ async function fixture(): Promise<{ root: string; extensionPath: string; snapsho
   return { root, extensionPath, snapshotIds: ids, projectRootHash: rootHash };
 }
 
-beforeAll(async () => { await execFileAsync(process.execPath, [join(repoRoot, 'esbuild.mjs')], { cwd: repoRoot }); });
-
 describe('complete CLI acceptance table', () => {
   it('runs mandatory commands in JSON and human modes with isolated paths and filters', async () => {
     const item = await fixture();
     try {
       const env = { ...process.env, VSCODE_EXTENSIONS: resolve(item.extensionPath, '..') };
       delete env.YMAI_OFFICIAL_EXTENSION_PATH;
+      const packageManifest = JSON.parse(await readFile(join(repoRoot, 'package.json'), 'utf8')) as { version: string };
       const launcher = await createOrRefreshCliLauncher({
         projectRoot: item.root,
         projectInstanceId: projectId,
         projectRootHash: item.projectRootHash,
         extensionRoot: repoRoot,
-        extensionVersion: '0.1.0',
+        extensionVersion: packageManifest.version,
         cliPath,
         generatedAt: '2026-08-20T00:00:00.000Z',
       });
+      const launcherText = await readFile(launcher.launcherPath, 'utf8');
+      expect(launcherText).not.toMatch(/powershell|Get-FileHash/iu);
+      expect(launcherText).toMatch(/ymai\.cjs/iu);
+      expect(await readFile(join(item.root, '.yuanmeng-inspector', 'bin', 'ymai.cjs'), 'utf8')).toContain('createHash');
       for (const args of [
         ['status'], ['find-ui', 'Ready Again'], ['list-ids', '--environment', 'test', '--validity', 'confirmed'],
         ['diff-ui', '--from', item.snapshotIds[0], '--to', item.snapshotIds[1]], ['where-used', '101'], ['api-search', 'GetUIName'], ['audit'],
@@ -89,6 +94,25 @@ describe('complete CLI acceptance table', () => {
         expect(result.stderr, args.join(' ')).toBe('');
         expect(JSON.parse(result.stdout).schemaVersion).toBe(1);
       }
+      await writeFile(join(item.root, 'src', 'Client', 'Broken.lua'), 'local broken =\n', { encoding: 'utf8', flag: 'w' }).catch(async (error: unknown) => {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        await mkdir(join(item.root, 'src', 'Client'), { recursive: true });
+        await writeFile(join(item.root, 'src', 'Client', 'Broken.lua'), 'local broken =\n', 'utf8');
+      });
+      const invalidAudit = await cli(['audit', '--project', item.root, '--json'], env);
+      expect(invalidAudit.code).toBe(6);
+      expect(invalidAudit.stderr).toBe('');
+      expect(invalidAudit.stdout).not.toMatch(/ProductError|\bat\s+runAudit\b/u);
+      expect(JSON.parse(invalidAudit.stdout)).toMatchObject({
+        schemaVersion: 1,
+        ok: false,
+        code: 'VALIDATION_FAILED',
+        data: {
+          reasonCode: 'INVALID_LUA_SYNTAX',
+          file: 'src/Client/Broken.lua',
+          evidence: 'STATIC_LOCAL',
+        },
+      });
       const exportPath = join(item.root, '清单.json');
       const exported = await cli(['export', 'ui', '--format', 'json', '--out', exportPath, '--project', item.root, '--json'], env);
       expect(exported.code).toBe(0);
@@ -105,6 +129,17 @@ describe('complete CLI acceptance table', () => {
       expect(launcherHuman.code, launcherHuman.stderr).toBe(0);
       expect(launcherHuman.stdout).toContain('Ready Again');
       expect(launcherHuman.stdout).not.toContain(item.root);
+      const addedFeedback = await cliWithLauncher(launcher.launcherPath, [
+        'feedback', 'add', 'bug', '自动刷新提示错误', '--message', '保存后仍显示未绑定', '--json',
+      ]);
+      expect(addedFeedback.code, addedFeedback.stderr).toBe(0);
+      const addedFeedbackId = (JSON.parse(addedFeedback.stdout) as { data: { entry: { feedbackId: string } } }).data.entry.feedbackId;
+      const listedFeedback = await cliWithLauncher(launcher.launcherPath, ['feedback', 'list', 'open', 'bug', '--json']);
+      expect(JSON.parse(listedFeedback.stdout)).toMatchObject({ data: { summary: { open: 1 }, entries: [{ feedbackId: addedFeedbackId }] } });
+      const resolvedFeedback = await cliWithLauncher(launcher.launcherPath, [
+        'feedback', 'resolve', addedFeedbackId, '--message', '已通过回归测试修复', '--json',
+      ]);
+      expect(JSON.parse(resolvedFeedback.stdout)).toMatchObject({ data: { entry: { status: 'resolved' } } });
       const metaPath = join(item.root, '.yuanmeng-inspector', 'meta.json');
       const originalMeta = await readFile(metaPath, 'utf8');
       await writeFile(metaPath, JSON.stringify({ schemaVersion: 1, projectInstanceId: projectId, projectRootHash: 'f'.repeat(64) }), 'utf8');
@@ -123,6 +158,28 @@ describe('complete CLI acceptance table', () => {
       await rm(item.extensionPath, { recursive: true, force: true });
     }
   }, 60_000);
+
+  it('lets CLI/MCP observe the current-window official connection overlay', async () => {
+    const item = await fixture();
+    try {
+      const statusPath = join(item.root, '.yuanmeng-inspector', 'status.json');
+      const status = JSON.parse(await readFile(statusPath, 'utf8')) as InspectorStatus;
+      status.link = { state: 'offline', reasonCode: 'STALE_DISK_STATE', lastProbeAt: null };
+      await writeFile(statusPath, JSON.stringify(status), 'utf8');
+      const now = new Date();
+      await writeLiveOfficialConnection(item.root, projectId, item.projectRootHash, {
+        state: 'online', observedAt: now.toISOString(), projectName: null, source: 'official-output-log'
+      }, nodeFileIO, now);
+      const result = await cli(['status', '--project', item.root, '--json']);
+      expect(result.code).toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        code: 'OK', data: { link: { state: 'online', reasonCode: 'OFFICIAL_OUTPUT_CONNECTED' } }
+      });
+    } finally {
+      await rm(item.root, { recursive: true, force: true });
+      await rm(item.extensionPath, { recursive: true, force: true });
+    }
+  });
 });
 
 async function cliWithLauncher(path: string, args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {

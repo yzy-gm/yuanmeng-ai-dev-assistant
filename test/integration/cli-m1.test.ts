@@ -4,10 +4,17 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { sha256Hex } from '../../src/core/hash.js';
 import { buildUiSnapshot } from '../../src/core/ui/index.js';
+import { createUiGeometryProbeToken, parseUiGeometryProbeLog } from '../../src/core/ui/runtime-geometry.js';
+import {
+  createUiRuntimeWidgetProbeToken,
+  createUiScreenPointProbeToken,
+  parseUiRuntimeWidgetProbeLog,
+  parseUiScreenPointProbeLog,
+} from '../../src/core/ui/runtime-inspection.js';
 import type { InspectorStatus, RegistryDocument, UiNode, UiSnapshot } from '../../src/core/model.js';
 
 const execFileAsync = promisify(execFile);
@@ -154,11 +161,207 @@ async function waitForPendingRequest(project: string): Promise<{ path: string; r
   throw new Error('CLI did not create an atomic refresh request');
 }
 
-beforeAll(async () => {
-  await execFileAsync(process.execPath, [join(repoRoot, 'esbuild.mjs')], { cwd: repoRoot });
-});
-
 describe('M1 CLI process contract', () => {
+  it('resolves UI deterministically and serves exact P0 runtime evidence or a bound probe', async () => {
+    const project = await createProject('fresh');
+    const snapshot = JSON.parse(await readFile(join(project, '.yuanmeng-inspector', 'ui', 'current.json'), 'utf8')) as UiSnapshot;
+
+    const resolved = await spawnCli(['resolve-ui', '经验', '--project', project, '--json']);
+    expect(parseEnvelope(resolved)).toMatchObject({ code: 'OK', data: { node: { id: '101', path: '/HUD/经验' } } });
+
+    const missingPoint = await spawnCli(['ui-inspect-point', '320', '240', '--project', project, '--json']);
+    expect(missingPoint.exitCode).toBe(9);
+    expect(parseEnvelope(missingPoint)).toMatchObject({
+      code: 'EVIDENCE_INSUFFICIENT', data: { reasonCode: 'UI_SCREEN_POINT_RUNTIME_REQUIRED', request: { x: 320, y: 240 } },
+    });
+    expect(missingPoint.stdout).toContain('UI:CheckWidgetByScreenPosition');
+
+    const context = { projectInstanceId: projectId, uiSnapshotId: snapshot.snapshotId };
+    const request = { x: 320, y: 240, includeGroup: false, groupId: '0' } as const;
+    const pointToken = createUiScreenPointProbeToken(context, request);
+    const point = parseUiScreenPointProbeLog(new TextEncoder().encode([
+      `[YMAI_UI_SCREEN_POINT_ENV] token=${pointToken} snapshot=${snapshot.snapshotId} point=320,240 includeGroup=false group=0 status=ok screenSize=1280,720 uiSize=1280,720`,
+      `[YMAI_UI_SCREEN_POINT] token=${pointToken} snapshot=${snapshot.snapshotId} point=320,240 includeGroup=false group=0 status=ok hit=101`,
+      '',
+    ].join('\n')), { snapshot, request });
+    const pointDirectory = join(project, '.yuanmeng-inspector', 'ui', 'screen-points');
+    await mkdir(pointDirectory, { recursive: true });
+    await writeFile(join(pointDirectory, 'current.json'), JSON.stringify(point), 'utf8');
+    expect(parseEnvelope(await spawnCli(['ui-inspect-point', '320', '240', '--project', project, '--json']))).toMatchObject({
+      code: 'OK', data: { evidence: 'STANDALONE_LOG', hitId: '101', hit: { classification: 'static' } },
+    });
+
+    const missingTree = await spawnCli(['ui-runtime-widgets', '经验', '--project', project, '--json']);
+    expect(missingTree.exitCode).toBe(9);
+    expect(missingTree.stdout).toContain('UI:GetAllChildren');
+    const treeToken = createUiRuntimeWidgetProbeToken(context, '101');
+    const widgets = parseUiRuntimeWidgetProbeLog(new TextEncoder().encode([
+      `[YMAI_UI_RUNTIME_TREE_ENV] token=${treeToken} snapshot=${snapshot.snapshotId} root=101 status=ok count=2 truncated=false`,
+      `[YMAI_UI_RUNTIME_WIDGET] token=${treeToken} snapshot=${snapshot.snapshotId} root=101 id=101 parent=none name=%E7%BB%8F%E9%AA%8C zOrder=1`,
+      `[YMAI_UI_DYNAMIC_DUPLICATE] token=${treeToken} snapshot=${snapshot.snapshotId} root=101 id=9001 template=101 parent=101`,
+      '',
+    ].join('\n')), { snapshot, rootId: '101' });
+    const widgetsDirectory = join(project, '.yuanmeng-inspector', 'ui', 'runtime-widgets');
+    await mkdir(widgetsDirectory, { recursive: true });
+    await writeFile(join(widgetsDirectory, 'current.json'), JSON.stringify(widgets), 'utf8');
+    expect(parseEnvelope(await spawnCli(['ui-runtime-widgets', '101', '--project', project, '--json']))).toMatchObject({
+      code: 'OK', data: { root: { id: '101' }, entries: expect.arrayContaining([expect.objectContaining({ id: '9001', classification: 'dynamic' })]) },
+    });
+
+    expect(parseEnvelope(await spawnCli(['runtime-probe', 'ui-runtime-tree', '经验', '--project', project, '--json']))).toMatchObject({
+      code: 'OK', data: { kind: 'ui-runtime-tree', rootId: '101', probeLua: expect.stringContaining('YMAI_UI_RUNTIME_TREE_ENV') },
+    });
+  });
+
+  it('returns a bound UI geometry probe first, then serves imported runtime screen coordinates', async () => {
+    const project = await createProject('fresh');
+    const snapshot = JSON.parse(await readFile(
+      join(project, '.yuanmeng-inspector', 'ui', 'current.json'),
+      'utf8',
+    )) as UiSnapshot;
+
+    const missing = await spawnCli(['ui-screen-snapshot', '经验', '--project', project, '--json']);
+    expect(missing.exitCode).toBe(9);
+    expect(parseEnvelope(missing)).toMatchObject({
+      code: 'EVIDENCE_INSUFFICIENT',
+      data: { selectedIds: ['101'], snapshotId: snapshot.snapshotId, evidence: 'STATIC_LOCAL' },
+    });
+    expect(missing.stdout).toContain('[YMAI_UI_GEOMETRY]');
+
+    const context = { projectInstanceId: projectId, uiSnapshotId: snapshot.snapshotId };
+    const common = `token=${createUiGeometryProbeToken(context, ['101'])} snapshot=${snapshot.snapshotId} selection=101`;
+    const runtime = parseUiGeometryProbeLog(new TextEncoder().encode([
+      `[YMAI_UI_GEOMETRY_ENV] ${common} status=ok screenSize=1920,1080 uiSize=1920,1080`,
+      `[YMAI_UI_GEOMETRY] ${common} id=101 status=ok position=10,20 size=100,40 anchored=10,20,0,0,0,0 screenRect=10,20,110,60 normalizedRect=0.005208333,0.018518519,0.057291667,0.055555556 angle=0 center=0.5,0.5 zOrder=3 parent=none centerHit=101`,
+      '',
+    ].join('\n')), { context, importedAt: '2026-08-23T00:00:00.000Z' });
+    const runtimeDirectory = join(project, '.yuanmeng-inspector', 'ui', 'runtime');
+    await mkdir(runtimeDirectory, { recursive: true });
+    await writeFile(join(runtimeDirectory, 'current.json'), JSON.stringify(runtime), 'utf8');
+
+    const ready = await spawnCli(['ui-screen-snapshot', '经验', '--project', project, '--json']);
+    expect(ready.exitCode).toBe(0);
+    expect(parseEnvelope(ready)).toMatchObject({
+      code: 'OK',
+      data: {
+        evidence: 'STANDALONE_LOG',
+        controls: [{ node: { id: '101' }, geometry: { status: 'ok', screenRect: { left: 10, top: 20, right: 110, bottom: 60 } } }],
+      },
+    });
+    const readyById = await spawnCli(['ui-screen-snapshot', '101', '--project', project, '--json']);
+    expect(readyById.exitCode).toBe(0);
+    expect(parseEnvelope(readyById)).toMatchObject({
+      code: 'OK', data: { controls: [{ node: { id: '101', name: '经验' } }] },
+    });
+  });
+
+  it('selects a complete UI subtree from parent IDs instead of path prefixes', async () => {
+    const project = await createProject('fresh');
+    const snapshot = buildUiSnapshot({
+      createdAt: new Date().toISOString(),
+      projectInstanceId: projectId,
+      mapFingerprint: null,
+      sources: [],
+      nodes: [
+        { ...node('200', '弹窗', '/弹窗'), parentId: null, depth: 0 },
+        { ...node('201', '按钮', '/弹窗/按钮'), parentId: '200', depth: 1 },
+        { ...node('202', '文字', '/弹窗/按钮/文字'), parentId: '201', depth: 2 },
+        // 路径元数据可能在导出边界短暂陈旧；真实 parentId 仍属于弹窗。
+        { ...node('204', '图片', '/旧路径/图片'), parentId: '200', depth: 1 },
+        // 路径相似但没有父子关系，不能误算成弹窗成员。
+        { ...node('203', '伪子控件', '/弹窗/伪子控件'), parentId: null, depth: 0 },
+      ],
+    });
+    await writeFile(join(project, '.yuanmeng-inspector', 'ui', 'current.json'), JSON.stringify(snapshot), 'utf8');
+
+    const result = await spawnCli(['ui-tree-screen-snapshot', '/弹窗', '--path', '--project', project, '--json']);
+
+    expect(result.exitCode).toBe(9);
+    expect(parseEnvelope(result)).toMatchObject({
+      code: 'EVIDENCE_INSUFFICIENT',
+      data: { selectedIds: ['200', '201', '202', '204'] },
+    });
+  });
+
+  it('rejects a cyclic UI parent graph instead of looping or returning a partial tree', async () => {
+    const project = await createProject('fresh');
+    const snapshot = buildUiSnapshot({
+      createdAt: new Date().toISOString(),
+      projectInstanceId: projectId,
+      mapFingerprint: null,
+      sources: [],
+      nodes: [
+        { ...node('300', '循环弹窗', '/循环弹窗'), parentId: '301', depth: 0 },
+        { ...node('301', '循环子控件', '/循环弹窗/循环子控件'), parentId: '300', depth: 1 },
+      ],
+    });
+    await writeFile(join(project, '.yuanmeng-inspector', 'ui', 'current.json'), JSON.stringify(snapshot), 'utf8');
+
+    const result = await spawnCli(['ui-tree-screen-snapshot', '/循环弹窗', '--path', '--project', project, '--json']);
+
+    expect(result.exitCode).toBe(6);
+    expect(parseEnvelope(result)).toMatchObject({ code: 'VALIDATION_FAILED' });
+  });
+
+  it('lets AI set and replace the project-local map display name', async () => {
+    const project = await createProject('fresh');
+    const first = await spawnCli(['set-map-name', '星光超市', '--project', project, '--json']);
+    expect(first.exitCode).toBe(0);
+    expect(parseEnvelope(first)).toMatchObject({ code: 'OK', data: { mapDisplayName: '星光超市' } });
+
+    const second = await spawnCli(['set-map-name', '星光超市·夜间版', '--project', project, '--json']);
+    expect(second.exitCode).toBe(0);
+    const status = await spawnCli(['status', '--project', project, '--json']);
+    expect(parseEnvelope(status)).toMatchObject({
+      data: { mapDisplayName: '星光超市·夜间版', mapName: null },
+    });
+  });
+
+  it('reports project-local plugin, launcher, bridge, and official command health', async () => {
+    const project = await createProject('fresh');
+
+    const status = await spawnCli(['status', '--project', project, '--json']);
+
+    expect(parseEnvelope(status)).toMatchObject({
+      data: {
+        environment: {
+          overall: 'degraded',
+          launchers: {
+            cli: { state: 'missing' },
+            mcp: { state: 'missing' }
+          },
+          bridge: { state: 'missing' },
+          official: {
+            refreshUiAvailable: true,
+            buildAvailable: false
+          }
+        }
+      }
+    });
+  });
+
+  it('keeps the project usable when only UI is stale and reports domain readiness plus a precise next action', async () => {
+    const project = await createProject('stale');
+
+    const status = await spawnCli(['status', '--project', project, '--json']);
+
+    expect(status.exitCode).toBe(0);
+    expect(parseEnvelope(status)).toMatchObject({
+      code: 'OK',
+      warnings: ['需要当前 UI 控件信息时运行 yuanmeng_ui_refresh；场景/Lua 等无关只读任务可继续。'],
+      data: {
+        freshness: 'stale',
+        readiness: {
+          ui: { state: 'stale', usable: true },
+          scene: { state: 'missing', usable: false },
+          lua: { state: 'ready', usable: true },
+          codeDelivery: { state: 'blocked', usable: false }
+        },
+        nextActions: ['需要当前 UI 控件信息时运行 yuanmeng_ui_refresh；场景/Lua 等无关只读任务可继续。']
+      }
+    });
+  });
+
   it.each([
     ['offline', ['status'], 2, 'OFFLINE'],
     ['stale', ['find-ui', '经验'], 3, 'STALE'],
@@ -357,6 +560,11 @@ describe('M1 CLI process contract', () => {
         query: '41001',
         kind: 'ui',
         results: [expect.objectContaining({ path: 'src/GameEntry.lua', value: '41001' })],
+        impact: {
+          scope: 'direct-references-only',
+          affectedFiles: ['src/GameEntry.lua'],
+          registry: [expect.objectContaining({ value: '41001', name: '经验' })],
+        },
       },
     });
     expect(result.stdout).not.toContain('"value":"3"');
@@ -416,6 +624,56 @@ describe('M1 CLI process contract', () => {
           expect.objectContaining({ code: 'API_ARGUMENT_COUNT', runtimeVerified: false }),
           expect.objectContaining({ code: 'UNREGISTERED_ID_REFERENCE', runtimeVerified: false }),
         ]),
+      },
+    });
+  });
+
+  it('runs a targeted errors-only audit without treating it as full-project evidence', async () => {
+    const project = await createProject('fresh');
+    const extension = await createApiExtensionsRoot();
+    await mkdir(join(project, 'src', 'Client'), { recursive: true });
+    await writeFile(join(project, 'src', 'GameEntry.lua'), [
+      'UI:SetVisible(49999)',
+      'return {}',
+      '',
+    ].join('\n'), 'utf8');
+    await writeFile(join(project, 'src', 'Client', 'GameClient_backup.lua'), [
+      'UI:SetVisible(59999)',
+      'return {}',
+      '',
+    ].join('\n'), 'utf8');
+
+    const full = await spawnCli(
+      ['audit', '--project', project, '--json'],
+      { ...process.env, VSCODE_EXTENSIONS: extension.root },
+    );
+    expect(full.exitCode).toBe(0);
+    expect(parseEnvelope(full)).toMatchObject({
+      data: {
+        scope: { mode: 'full', files: [] },
+        issueCounts: { error: 2, warning: 2, info: 0 },
+        presentation: { errorsOnly: false, returnedDiagnostics: 4, omittedDiagnostics: 0 },
+      },
+    });
+
+    const targeted = await spawnCli(
+      ['audit', '--file', 'src/GameEntry.lua', '--errors-only', '--project', project, '--json'],
+      { ...process.env, VSCODE_EXTENSIONS: extension.root },
+    );
+    expect(targeted.exitCode).toBe(0);
+    expect(targeted.stdout).not.toContain('GameClient_backup.lua');
+    expect(targeted.stdout).not.toContain('59999');
+    expect(parseEnvelope(targeted)).toMatchObject({
+      code: 'OK',
+      data: {
+        scope: {
+          mode: 'targeted',
+          files: ['src/GameEntry.lua'],
+          fullProjectEvidence: false,
+        },
+        issueCounts: { error: 1, warning: 1, info: 0 },
+        diagnostics: [expect.objectContaining({ code: 'API_ARGUMENT_COUNT', severity: 'error' })],
+        presentation: { errorsOnly: true, returnedDiagnostics: 1, omittedDiagnostics: 1 },
       },
     });
   });
