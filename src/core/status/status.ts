@@ -1,4 +1,8 @@
 import { systemClock, type Clock } from '../clock.js';
+import {
+  OFFICIAL_OUTPUT_CONNECTION_MAX_AGE_MS,
+  type OfficialConnectionObservation,
+} from '../logs/official-connection.js';
 import type { InspectorStatus, ProjectIdentity } from '../model.js';
 
 export interface SuccessfulRefreshAttempt {
@@ -41,6 +45,8 @@ export interface StatusInput {
   currentMapFingerprint?: string | null;
   currentOfficialExtensionVersion?: string | null;
   issueCounts?: Readonly<Record<'error' | 'warning' | 'info', number>>;
+  /** A separate, redacted observation of the official extension's output log. */
+  officialConnection?: OfficialConnectionObservation;
 }
 
 const EMPTY_PROJECT: ProjectIdentity = {
@@ -87,15 +93,35 @@ function canProveSuccessfulRefresh(attempt: RefreshAttempt | null, project: Proj
     || attempt.mapFingerprint === project.mapFingerprint;
 }
 
+function usableOfficialConnection(
+  value: OfficialConnectionObservation | undefined,
+  clock: Clock,
+): OfficialConnectionObservation | null {
+  if (value === undefined || value.state === 'unknown' || value.observedAt === null) return null;
+  const ageMilliseconds = clock.now().getTime() - Date.parse(value.observedAt);
+  return Number.isFinite(ageMilliseconds)
+    && ageMilliseconds >= -120_000
+    && ageMilliseconds <= OFFICIAL_OUTPUT_CONNECTION_MAX_AGE_MS
+    ? value
+    : null;
+}
+
 export function reduceStatus(input: StatusInput): InspectorStatus {
   const project = input.project ?? EMPTY_PROJECT;
   const clock = input.clock ?? systemClock;
   const staleAfterMinutes = input.staleAfterMinutes ?? 30;
   const commandAvailable = hasAnyCommand(input.commandsPresent);
   const successfulRefresh = canProveSuccessfulRefresh(input.refreshAttempt, project);
+  const officialConnection = usableOfficialConnection(input.officialConnection, clock);
   let linkState: 'unknown' | 'online' | 'offline';
   let linkReason: string;
-  if (!commandAvailable) {
+  if (officialConnection?.state === 'online') {
+    linkState = 'online';
+    linkReason = 'OFFICIAL_OUTPUT_CONNECTED';
+  } else if (officialConnection?.state === 'offline') {
+    linkState = 'offline';
+    linkReason = 'OFFICIAL_OUTPUT_DISCONNECTED';
+  } else if (!commandAvailable) {
     linkState = 'offline';
     linkReason = 'OFFICIAL_COMMANDS_MISSING';
   } else if (input.refreshAttempt === null) {
@@ -185,7 +211,7 @@ export function reduceStatus(input: StatusInput): InspectorStatus {
     link: {
       state: linkState,
       reasonCode: linkReason,
-      lastProbeAt: input.refreshAttempt?.completedAt ?? null,
+      lastProbeAt: officialConnection?.observedAt ?? input.refreshAttempt?.completedAt ?? null,
     },
     ui: {
       freshness: input.snapshot === null ? 'missing' : reasonCodes.length === 0 ? 'fresh' : 'stale',
