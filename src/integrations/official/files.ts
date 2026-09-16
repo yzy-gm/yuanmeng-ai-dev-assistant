@@ -30,11 +30,17 @@ export interface WaitForStableExportOptions {
   baselineHashes: Readonly<Record<string, string | null>>;
   baselineSignatures?: Readonly<Record<string, string | null>>;
   acceptUnchangedStableFiles?: boolean;
+  requireSignatureChangeForUnchanged?: boolean;
   sampleMilliseconds?: number;
   stableSampleCount?: number;
   splitCollectionMilliseconds?: number;
   totalTimeoutMilliseconds?: number;
+  timeoutError?: {
+    message: string;
+    nextActions: string[];
+  };
   validateContent?: (path: string, content: string) => void;
+  signal?: AbortSignal;
 }
 
 interface SampleState {
@@ -42,8 +48,32 @@ interface SampleState {
   equalSamples: number;
 }
 
-function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+function abortError(signal: AbortSignal): unknown {
+  if (signal.reason !== undefined) return signal.reason;
+  const error = new Error('等待稳定导出已取消。');
+  error.name = 'AbortError';
+  return error;
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted === true) throw abortError(signal);
+}
+
+function delay(milliseconds: number, signal: AbortSignal | undefined): Promise<void> {
+  throwIfAborted(signal);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(done, milliseconds);
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      reject(abortError(signal!));
+    };
+    function done(): void {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 async function sampleSignature(io: FileIO, path: string): Promise<string | null> {
@@ -66,6 +96,7 @@ function positiveInteger(value: number, name: string): number {
 }
 
 export async function waitForStableExport(options: WaitForStableExportOptions): Promise<StableExportResult> {
+  throwIfAborted(options.signal);
   const sampleMilliseconds = positiveInteger(
     options.sampleMilliseconds ?? DEFAULT_STABLE_EXPORT_OPTIONS.sampleMilliseconds,
     'sampleMilliseconds',
@@ -91,10 +122,12 @@ export async function waitForStableExport(options: WaitForStableExportOptions): 
 
   while (Date.now() - startedAt <= totalTimeoutMilliseconds) {
     for (const path of options.paths) {
+      throwIfAborted(options.signal);
       if (accepted.has(path)) {
         continue;
       }
       const signature = await sampleSignature(options.io, path);
+      throwIfAborted(options.signal);
       if (signature === null) {
         samples.delete(path);
         continue;
@@ -108,9 +141,11 @@ export async function waitForStableExport(options: WaitForStableExportOptions): 
         continue;
       }
       const bytes = await options.io.readBytes(path);
+      throwIfAborted(options.signal);
       const content = decodeLuaUtf8(bytes);
       const hash = sha256Hex(bytes);
       const afterReadSignature = await sampleSignature(options.io, path);
+      throwIfAborted(options.signal);
       if (afterReadSignature !== signature) {
         samples.set(path, { signature: afterReadSignature ?? '', equalSamples: 0 });
         continue;
@@ -121,13 +156,20 @@ export async function waitForStableExport(options: WaitForStableExportOptions): 
       if (contentChanged) {
         observedContentChange = true;
       }
-      if (!contentChanged && options.acceptUnchangedStableFiles !== true) {
-        continue;
-      }
       const hasBaselineSignature = options.baselineSignatures !== undefined
         && Object.prototype.hasOwnProperty.call(options.baselineSignatures, path);
-      if (hasBaselineSignature && afterReadSignature !== (options.baselineSignatures?.[path] ?? null)) {
+      const signatureChanged = hasBaselineSignature
+        && afterReadSignature !== (options.baselineSignatures?.[path] ?? null);
+      if (signatureChanged) {
         observedSignatureChange = true;
+      }
+      if (!contentChanged) {
+        if (options.acceptUnchangedStableFiles !== true) {
+          continue;
+        }
+        if (options.requireSignatureChangeForUnchanged === true && !signatureChanged) {
+          continue;
+        }
       }
       accepted.set(path, { path, content, sha256: hash });
       firstAcceptedAt ??= Date.now();
@@ -139,14 +181,18 @@ export async function waitForStableExport(options: WaitForStableExportOptions): 
     if (firstAcceptedAt !== null && Date.now() - firstAcceptedAt >= splitCollectionMilliseconds) {
       break;
     }
-    await delay(sampleMilliseconds);
+    await delay(sampleMilliseconds, options.signal);
   }
 
   if (accepted.size === 0) {
+    const timeoutError = options.timeoutError ?? {
+      message: '等待官方“获取自定义界面结构”更新超时。',
+      nextActions: ['确认当前工程已激活且官方联动在线，并检查 CustomUIData.lua/CustomUIData2.lua 是否存在后重试。'],
+    };
     throw new ProductError(
       'EXPORT_TIMEOUT',
-      '等待官方“获取自定义界面结构”更新超时。',
-      ['确认当前工程已激活且官方联动在线，并检查 CustomUIData.lua/CustomUIData2.lua 是否存在后重试。'],
+      timeoutError.message,
+      timeoutError.nextActions,
       'UNIT_E2E',
     );
   }
