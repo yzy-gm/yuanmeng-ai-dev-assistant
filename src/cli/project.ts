@@ -7,7 +7,10 @@ import {
   EXTENSION_ID,
   validateCliLauncherManifest,
   validateLauncherBinding,
+  validateMcpLauncherBinding,
+  validateMcpLauncherManifest,
   type CliLauncherManifest,
+  type McpLauncherManifest,
 } from '../core/launcher/manifest.js';
 
 export interface ResolvedCliProject {
@@ -21,6 +24,7 @@ export interface ResolveProjectInput {
   launcherManifest: string | null;
   cwd: string;
   currentCliPath: string;
+  launcherKind?: 'cli' | 'mcp';
 }
 
 interface ProjectMetadata {
@@ -115,10 +119,11 @@ async function findProjectRoot(start: string): Promise<string> {
   return candidates[0]!;
 }
 
-async function loadManifest(path: string): Promise<CliLauncherManifest> {
+async function loadManifest(path: string, kind: 'cli' | 'mcp'): Promise<CliLauncherManifest | McpLauncherManifest> {
   try {
     const value: unknown = JSON.parse(await readFile(path, 'utf8'));
-    validateCliLauncherManifest(value);
+    if (kind === 'mcp') validateMcpLauncherManifest(value);
+    else validateCliLauncherManifest(value);
     return value;
   } catch (error) {
     if (error instanceof ProductError) {
@@ -134,6 +139,7 @@ function pathInside(root: string, candidate: string): boolean {
 }
 
 async function resolveLauncherProject(input: ResolveProjectInput): Promise<ResolvedCliProject> {
+  const launcherKind = input.launcherKind ?? 'cli';
   let manifestPath: string;
   try {
     manifestPath = await realpath(resolve(input.cwd, input.launcherManifest!));
@@ -143,24 +149,37 @@ async function resolveLauncherProject(input: ResolveProjectInput): Promise<Resol
     }
     throw error;
   }
-  const manifest = await loadManifest(manifestPath);
+  const manifest = await loadManifest(manifestPath, launcherKind);
   const currentCliPath = await realpath(input.currentCliPath);
-  const recordedCliPath = await realpath(manifest.cliPath);
+  const recordedCliPath = await realpath(launcherKind === 'mcp'
+    ? (manifest as McpLauncherManifest).mcpPath
+    : (manifest as CliLauncherManifest).cliPath);
   const extensionRoot = await realpath(dirname(dirname(recordedCliPath)));
   if (!pathInside(extensionRoot, recordedCliPath)) {
     fail('CLI 目标不在扩展安装目录内。');
   }
   const cliBytes = await readFile(recordedCliPath);
   const packageValue = JSON.parse(await readFile(join(extensionRoot, 'package.json'), 'utf8')) as Record<string, unknown>;
-  validateLauncherBinding(manifest, {
+  const commonInvocation = {
     extensionId: EXTENSION_ID,
     extensionVersion: typeof packageValue.version === 'string' ? packageValue.version : '',
     extensionRootHash: sha256Hex(normalizeCanonicalRoot(extensionRoot)),
-    cliPath: currentCliPath,
-    cliSha256: sha256Hex(cliBytes),
     projectInstanceId: manifest.projectInstanceId,
     projectRootHash: manifest.projectRootHash,
-  });
+  };
+  if (launcherKind === 'mcp') {
+    validateMcpLauncherBinding(manifest as McpLauncherManifest, {
+      ...commonInvocation,
+      mcpPath: currentCliPath,
+      mcpSha256: sha256Hex(cliBytes),
+    });
+  } else {
+    validateLauncherBinding(manifest as CliLauncherManifest, {
+      ...commonInvocation,
+      cliPath: currentCliPath,
+      cliSha256: sha256Hex(cliBytes),
+    });
+  }
   if (recordedCliPath !== currentCliPath) {
     fail('当前 CLI 与启动器绑定目标不一致。');
   }
