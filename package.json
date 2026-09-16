@@ -1,20 +1,12 @@
 {
   "name": "yuanmeng-ai-dev-assistant",
   "displayName": "元梦 AI 开发助手",
-  "description": "由不见星光开发，为《元梦之星》创作者提供本地 UI、ID、Lua 与 API 检查能力的 VS Code 伴随工具。",
-  "version": "0.1.0",
+  "description": "由不见星光开发，为《元梦之星》创作者提供本地 UI、场景、ID、Lua、API 审查与玩法模拟的开源 VS Code 伴随工具。",
+  "version": "0.6.0",
   "private": true,
   "publisher": "bujianxingguang",
   "author": "不见星光",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/yzy-gm/yuanmeng-ai-dev-assistant.git"
-  },
-  "homepage": "https://github.com/yzy-gm/yuanmeng-ai-dev-assistant#readme",
-  "bugs": {
-    "url": "https://github.com/yzy-gm/yuanmeng-ai-dev-assistant/issues"
-  },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "pricing": "Free",
   "icon": "media/yuanmeng-ai.png",
   "keywords": [
@@ -33,7 +25,7 @@
     "ymai": "./out/cli.cjs"
   },
   "engines": {
-    "vscode": "^1.70.0",
+    "vscode": "^1.134.0",
     "node": ">=20"
   },
   "categories": [
@@ -48,21 +40,62 @@
     "onCommand:yuanmengAi.refreshUi",
     "onCommand:yuanmengAi.findUi",
     "onCommand:yuanmengAi.openWizard",
+    "onCommand:yuanmengAi.setMapDisplayName",
     "onCommand:yuanmengAi.copyCliCommand",
     "onCommand:yuanmengAi.importRegistry",
+    "onCommand:yuanmengAi.importSceneIdFromClipboard",
     "onCommand:yuanmengAi.previewPatch",
     "onCommand:yuanmengAi.undoPatch",
     "onCommand:yuanmengAi.buildScripts",
     "onCommand:yuanmengAi.readProperty",
     "onCommand:yuanmengAi.pushPropertyLiteral",
     "onCommand:yuanmengAi.importLog",
+    "onCommand:yuanmengAi.bindSceneSource",
+    "onCommand:yuanmengAi.refreshScene",
+    "onCommand:yuanmengAi.findScene",
+    "onCommand:yuanmengAi.copySceneHierarchyPath",
+    "onCommand:yuanmengAi.copySceneLuaConstant",
+    "onCommand:yuanmengAi.copySceneJsonSnippet",
+    "onCommand:yuanmengAi.findSceneLuaReferences",
+    "onCommand:yuanmengAi.planSceneSelection",
+    "onCommand:yuanmengAi.exportScene",
+    "onCommand:yuanmengAi.locateSceneByProperty",
+    "onCommand:yuanmengAi.generateFloorAlignment",
+    "onCommand:yuanmengAi.cleanSceneCache",
+    "onCommand:yuanmengAi.previewScenePlan",
+    "onCommand:yuanmengAi.generateGameplayDraft",
+    "onCommand:yuanmengAi.runGameplayTests",
+    "onCommand:yuanmengAi.runConfirmedGameplayTests",
+    "onCommand:yuanmengAi.openGameplayReport",
+    "onCommand:yuanmengAi.refreshGameplayView",
+    "onCommand:yuanmengAi.previewSceneRebind",
+    "onCommand:yuanmengAi.openAnonymousDiagnostic",
+    "onCommand:yuanmengAi.insertGameplayTraceProbe",
+    "onCommand:yuanmengAi.removeGameplayTraceProbe",
+    "onCommand:yuanmengAi.recordFeedback",
+    "onCommand:yuanmengAi.openFeedbackInbox",
+    "onCommand:yuanmengAi.previewCodexMcpRegistration",
+    "onCommand:yuanmengAi.registerCodexMcp",
+    "onCommand:yuanmengAi.removeCodexMcp",
     "onView:yuanmengAi.environment",
     "onView:yuanmengAi.ui",
     "onView:yuanmengAi.registry",
     "onView:yuanmengAi.search",
-    "onView:yuanmengAi.problems"
+    "onView:yuanmengAi.problems",
+    "onView:yuanmengAi.scene",
+    "onView:yuanmengAi.sceneChanges",
+    "onView:yuanmengAi.scenePlans",
+    "onView:yuanmengAi.sceneFields",
+    "onView:yuanmengAi.sceneProblems",
+    "onView:yuanmengAi.gameplay"
   ],
   "contributes": {
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "yuanmengAi.localProjects",
+        "label": "元梦 AI 本机工程"
+      }
+    ],
     "commands": [
       {
         "command": "yuanmengAi.refreshUi",
@@ -77,6 +110,11 @@
       {
         "command": "yuanmengAi.openWizard",
         "title": "%command.openWizard%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.setMapDisplayName",
+        "title": "%command.setMapDisplayName%",
         "category": "%command.category%"
       },
       {
@@ -102,6 +140,11 @@
       {
         "command": "yuanmengAi.importRegistry",
         "title": "%command.importRegistry%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.importSceneIdFromClipboard",
+        "title": "%command.importSceneIdFromClipboard%",
         "category": "%command.category%"
       },
       {
@@ -133,6 +176,161 @@
         "command": "yuanmengAi.importLog",
         "title": "%command.importLog%",
         "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.bindSceneSource",
+        "title": "%command.bindSceneSource%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.refreshScene",
+        "title": "%command.refreshScene%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.findScene",
+        "title": "%command.findScene%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.copySceneId",
+        "title": "%command.copySceneId%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.copySceneTypeId",
+        "title": "%command.copySceneTypeId%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.copySceneHierarchyPath",
+        "title": "%command.copySceneHierarchyPath%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.copySceneLuaConstant",
+        "title": "%command.copySceneLuaConstant%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.copySceneJsonSnippet",
+        "title": "%command.copySceneJsonSnippet%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.findSceneLuaReferences",
+        "title": "%command.findSceneLuaReferences%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.planSceneSelection",
+        "title": "%command.planSceneSelection%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.generateSceneProbe",
+        "title": "%command.generateSceneProbe%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.inspectSceneFields",
+        "title": "%command.inspectSceneFields%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.exportScene",
+        "title": "%command.exportScene%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.locateSceneByProperty",
+        "title": "%command.locateSceneByProperty%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.generateFloorAlignment",
+        "title": "%command.generateFloorAlignment%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.cleanSceneCache",
+        "title": "%command.cleanSceneCache%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.previewScenePlan",
+        "title": "%command.previewScenePlan%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.generateGameplayDraft",
+        "title": "%command.generateGameplayDraft%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.runGameplayTests",
+        "title": "%command.runGameplayTests%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.runConfirmedGameplayTests",
+        "title": "%command.runConfirmedGameplayTests%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.openGameplayReport",
+        "title": "%command.openGameplayReport%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.refreshGameplayView",
+        "title": "%command.refreshGameplayView%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.previewSceneRebind",
+        "title": "%command.previewSceneRebind%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.openAnonymousDiagnostic",
+        "title": "%command.openAnonymousDiagnostic%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.insertGameplayTraceProbe",
+        "title": "%command.insertGameplayTraceProbe%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.removeGameplayTraceProbe",
+        "title": "%command.removeGameplayTraceProbe%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.recordFeedback",
+        "title": "%command.recordFeedback%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.openFeedbackInbox",
+        "title": "%command.openFeedbackInbox%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.previewCodexMcpRegistration",
+        "title": "预览 Codex MCP 注册",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.registerCodexMcp",
+        "title": "注册/刷新当前工程到 Codex MCP",
+        "category": "%command.category%"
+      },
+      {
+        "command": "yuanmengAi.removeCodexMcp",
+        "title": "从 Codex MCP 移除当前工程",
+        "category": "%command.category%"
       }
     ],
     "viewsContainers": {
@@ -153,6 +351,30 @@
         {
           "id": "yuanmengAi.ui",
           "name": "%views.ui%"
+        },
+        {
+          "id": "yuanmengAi.scene",
+          "name": "%views.scene%"
+        },
+        {
+          "id": "yuanmengAi.sceneChanges",
+          "name": "%views.sceneChanges%"
+        },
+        {
+          "id": "yuanmengAi.scenePlans",
+          "name": "%views.scenePlans%"
+        },
+        {
+          "id": "yuanmengAi.sceneFields",
+          "name": "%views.sceneFields%"
+        },
+        {
+          "id": "yuanmengAi.sceneProblems",
+          "name": "%views.sceneProblems%"
+        },
+        {
+          "id": "yuanmengAi.gameplay",
+          "name": "%views.gameplay%"
         },
         {
           "id": "yuanmengAi.registry",
@@ -184,6 +406,56 @@
           "command": "yuanmengAi.copyLuaConstant",
           "when": "viewItem == yuanmengUiNode",
           "group": "navigation@3"
+        },
+        {
+          "command": "yuanmengAi.copySceneId",
+          "when": "viewItem == yuanmengSceneInstance",
+          "group": "inline@1"
+        },
+        {
+          "command": "yuanmengAi.copySceneTypeId",
+          "when": "viewItem == yuanmengSceneInstance",
+          "group": "navigation@2"
+        },
+        {
+          "command": "yuanmengAi.copySceneHierarchyPath",
+          "when": "viewItem == yuanmengSceneInstance || viewItem == yuanmengSceneGroup",
+          "group": "navigation@2.1"
+        },
+        {
+          "command": "yuanmengAi.copySceneLuaConstant",
+          "when": "viewItem == yuanmengSceneInstance || viewItem == yuanmengSceneGroup",
+          "group": "navigation@2.2"
+        },
+        {
+          "command": "yuanmengAi.copySceneJsonSnippet",
+          "when": "viewItem == yuanmengSceneInstance || viewItem == yuanmengSceneGroup",
+          "group": "navigation@2.3"
+        },
+        {
+          "command": "yuanmengAi.findSceneLuaReferences",
+          "when": "viewItem == yuanmengSceneInstance || viewItem == yuanmengSceneGroup",
+          "group": "navigation@2.4"
+        },
+        {
+          "command": "yuanmengAi.planSceneSelection",
+          "when": "viewItem == yuanmengSceneInstance || viewItem == yuanmengSceneGroup",
+          "group": "navigation@2.5"
+        },
+        {
+          "command": "yuanmengAi.inspectSceneFields",
+          "when": "viewItem == yuanmengSceneInstance || viewItem == yuanmengSceneGroup",
+          "group": "navigation@3"
+        },
+        {
+          "command": "yuanmengAi.generateSceneProbe",
+          "when": "viewItem == yuanmengSceneInstance || viewItem == yuanmengSceneGroup",
+          "group": "navigation@4"
+        },
+        {
+          "command": "yuanmengAi.generateFloorAlignment",
+          "when": "viewItem == yuanmengSceneGroup",
+          "group": "navigation@5"
         }
       ]
     },
@@ -202,6 +474,13 @@
           "minimum": 1,
           "maximum": 300,
           "description": "%configuration.uiRefreshTimeoutSeconds%"
+        },
+        "yuanmengAi.propertyReadTimeoutSeconds": {
+          "type": "number",
+          "default": 120,
+          "minimum": 15,
+          "maximum": 900,
+          "description": "%configuration.propertyReadTimeoutSeconds%"
         },
         "yuanmengAi.buildTimeoutSeconds": {
           "type": "number",
@@ -231,13 +510,79 @@
         },
         "yuanmengAi.enableInternalLogAdapter": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "%configuration.enableInternalLogAdapter%"
+        },
+        "yuanmengAi.sceneStableSampleMilliseconds": {
+          "type": "number",
+          "default": 200,
+          "minimum": 25,
+          "maximum": 5000,
+          "description": "%configuration.sceneStableSampleMilliseconds%"
+        },
+        "yuanmengAi.sceneStableSampleCount": {
+          "type": "integer",
+          "default": 3,
+          "minimum": 2,
+          "maximum": 20,
+          "description": "%configuration.sceneStableSampleCount%"
+        },
+        "yuanmengAi.sceneRefreshTimeoutSeconds": {
+          "type": "number",
+          "default": 30,
+          "minimum": 1,
+          "maximum": 600,
+          "description": "%configuration.sceneRefreshTimeoutSeconds%"
+        },
+        "yuanmengAi.sceneCacheMaxCount": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 10000,
+          "description": "%configuration.sceneCacheMaxCount%"
+        },
+        "yuanmengAi.sceneCacheMaxAgeDays": {
+          "type": "number",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 3650,
+          "description": "%configuration.sceneCacheMaxAgeDays%"
+        },
+        "yuanmengAi.mcpToolProfile": {
+          "type": "string",
+          "enum": [
+            "full",
+            "workflow",
+            "scene",
+            "gameplay"
+          ],
+          "default": "workflow",
+          "description": "%configuration.mcpToolProfile%"
+        },
+        "yuanmengAi.gameInstallPath": {
+          "type": "string",
+          "default": "",
+          "description": "%configuration.gameInstallPath%"
+        },
+        "yuanmengAi.ugcDataPath": {
+          "type": "string",
+          "default": "",
+          "description": "%configuration.ugcDataPath%"
         },
         "yuanmengAi.officialExtensionPath": {
           "type": "string",
           "default": "",
           "description": "%configuration.officialExtensionPath%"
+        },
+        "yuanmengAi.eventsDocumentationPath": {
+          "type": "string",
+          "default": "",
+          "description": "%configuration.eventsDocumentationPath%"
+        },
+        "yuanmengAi.resourceDocumentationPath": {
+          "type": "string",
+          "default": "",
+          "description": "%configuration.resourceDocumentationPath%"
         }
       }
     }
@@ -252,28 +597,34 @@
     "pretest:unit": "node scripts/check-system-node.mjs",
     "test:unit": "vitest run --dir test/unit",
     "pretest:integration": "node scripts/check-system-node.mjs",
-    "test:integration": "vitest run --dir test/integration --passWithNoTests",
+    "test:integration": "npm run build && vitest run --dir test/integration --passWithNoTests --no-file-parallelism",
     "test:extension": "node scripts/run-extension-tests.mjs --version stable && node scripts/run-extension-tests.mjs --version stable --official-schema-gate --grep \"calibrated indexed projection\"",
     "privacy-audit": "node scripts/privacy-audit.mjs --json",
-    "preflight:public-release": "node scripts/public-release-preflight.mjs --manifest package.json --json",
+    "baseline:private": "node scripts/create-private-source-baseline.mjs",
+    "prepublishOnly": "node scripts/refuse-public-publish.mjs",
+    "preflight:public-release": "node scripts/public-release-preflight.mjs --json",
     "inspect-vsix": "node scripts/inspect-vsix.mjs",
     "build-upgrade-fixture": "node scripts/build-upgrade-fixture.mjs",
     "prebuild": "node scripts/check-system-node.mjs",
     "build": "node esbuild.mjs",
     "generate:marketplace-icon": "node scripts/generate-marketplace-icon.mjs",
     "verify": "npm run typecheck && npm run lint && npm run test:unit && npm run test:integration && npm run test:extension",
-    "package:vsix": "npm run privacy-audit && npm run generate:marketplace-icon && npm run build && vsce package --out outputs/yuanmeng-ai-dev-assistant-0.1.0.vsix && node scripts/inspect-vsix.mjs outputs/yuanmeng-ai-dev-assistant-0.1.0.vsix --json",
-    "package:release": "npm run privacy-audit && npm run generate:marketplace-icon && npm run build && vsce package --out outputs/yuanmeng-ai-dev-assistant-0.1.0.vsix && node scripts/inspect-vsix.mjs outputs/yuanmeng-ai-dev-assistant-0.1.0.vsix --json"
+    "package:vsix": "node scripts/package-public-release.mjs",
+    "package:release": "npm run package:vsix",
+    "export:public-repository": "node scripts/export-public-repository.mjs"
   },
   "dependencies": {
+    "@modelcontextprotocol/server": "2.0.0",
     "luaparse": "0.3.1",
-    "yaml": "2.9.0"
+    "yaml": "2.9.0",
+    "zod": "4.4.3"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
     "@types/luaparse": "0.2.13",
     "@types/node": "20.19.17",
     "@types/node16": "npm:@types/node@16.18.126",
-    "@types/vscode": "1.70.0",
+    "@types/vscode": "1.134.0",
     "@vscode/test-electron": "2.5.2",
     "@vscode/vsce": "3.6.2",
     "esbuild": "0.25.10",
@@ -282,5 +633,13 @@
     "typescript-eslint": "8.44.1",
     "vite": "7.1.12",
     "vitest": "4.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yzy-gm/yuanmeng-ai-dev-assistant.git"
+  },
+  "homepage": "https://github.com/yzy-gm/yuanmeng-ai-dev-assistant#readme",
+  "bugs": {
+    "url": "https://github.com/yzy-gm/yuanmeng-ai-dev-assistant/issues"
   }
 }

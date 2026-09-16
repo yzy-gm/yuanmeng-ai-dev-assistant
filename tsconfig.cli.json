@@ -11,6 +11,7 @@
   },
   "include": [
     "src/core/**/*.ts",
-    "src/cli/**/*.ts"
+    "src/cli/**/*.ts",
+    "src/mcp/**/*.ts"
   ]
 }
