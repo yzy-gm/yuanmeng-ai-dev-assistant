@@ -25,7 +25,15 @@ export interface ProjectDiagnostic {
     | 'API_LITERAL_TYPE'
     | 'DUPLICATE_UI_NAME'
     | 'DUPLICATE_UI_ID'
-    | 'STALE_UI_SNAPSHOT';
+    | 'STALE_UI_SNAPSHOT'
+    | 'OFFICIAL_API_UNAVAILABLE'
+    | 'SCENE_EVENT_BINDING_REQUIRED'
+    | 'SCENE_EVENT_BINDING_UNCONFIRMED'
+    | 'SCENE_EVENT_BINDING_STALE'
+    | 'SCENE_EVIDENCE_INSUFFICIENT'
+    | 'SCENE_CAPABILITY_MISMATCH'
+    | 'EVENT_DOCUMENTATION_BLOCKED'
+    | 'LUA_SYNTAX_ERROR';
   severity: DiagnosticSeverity;
   message: string;
   nextAction: string;
@@ -112,6 +120,13 @@ function analyzeIdReferences(input: AnalyzeProjectInput): ProjectDiagnostic[] {
   const output: ProjectDiagnostic[] = [];
   const byId = new Map(input.registry.records.map((record) => [record.recordId, record]));
   for (const reference of input.sourceIndex.idReferences) {
+    // 玩家、道具、图片、特效等 ID 属于官方运行时/资源域，并不属于本插件的
+    // 场景/UI 注册中心。只有可登记域和旧版未分域引用才参与“未登记”诊断。
+    if (reference.evidence.source === 'api'
+      && reference.idDomain !== undefined
+      && !['scene-instance', 'element-type', 'scene-layer', 'ui-control', 'unknown'].includes(reference.idDomain)) {
+      continue;
+    }
     const record = reference.evidence.source === 'registry'
       ? byId.get(reference.evidence.recordId)
       : undefined;
@@ -203,11 +218,24 @@ function analyzeApiCalls(input: AnalyzeProjectInput): ProjectDiagnostic[] {
       }
       continue;
     }
-    if (call.argumentCount !== declaration.params.length) {
+    const variadicParameterIndex = declaration.params.findIndex((parameter) => parameter.name === '...');
+    const optionalParameterIndex = declaration.params.findIndex((parameter) => parameter.optional === true);
+    const minimumArgumentCount = variadicParameterIndex === -1
+      ? (optionalParameterIndex === -1 ? declaration.params.length : optionalParameterIndex)
+      : variadicParameterIndex;
+    const maximumArgumentCount = variadicParameterIndex === -1 ? declaration.params.length : null;
+    const argumentCountMismatch = call.argumentCount < minimumArgumentCount
+      || (maximumArgumentCount !== null && call.argumentCount > maximumArgumentCount);
+    if (argumentCountMismatch) {
+      const requirement = maximumArgumentCount === null
+        ? `至少 ${minimumArgumentCount} 个参数`
+        : minimumArgumentCount === maximumArgumentCount
+          ? `${maximumArgumentCount} 个参数`
+          : `${minimumArgumentCount}-${maximumArgumentCount} 个参数`;
       output.push(sourceDiagnostic(call, {
         code: 'API_ARGUMENT_COUNT',
         severity: 'error',
-        message: `${call.qualifiedName} 需要 ${declaration.params.length} 个参数，当前传入 ${call.argumentCount} 个。`,
+        message: `${call.qualifiedName} 需要${requirement}，当前传入 ${call.argumentCount} 个。`,
         nextAction: `按官方签名 ${declaration.signature} 调整参数。`,
       }));
     }
