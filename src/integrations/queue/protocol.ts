@@ -194,7 +194,7 @@ export class RequestQueueHost {
         requestId,
         status: 'completed',
         code: 'OK',
-        message: unchanged ? '结构无变化，继续使用现有快照。' : '已完成 UI 结构更新请求。',
+        message: unchanged ? '已检查 UI，内容未变化；现有快照仍为最新。' : '已完成 UI 结构更新请求。',
         completedAt: this.#options.clock.now().toISOString(),
       };
       await this.#writeResult(result);
