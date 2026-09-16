@@ -7,10 +7,15 @@ import { sha256Hex, stableJson } from '../core/hash.js';
 import {
   EXTENSION_ID,
   validateCliLauncherManifest,
+  validateMcpLauncherManifest,
   type CliLauncherManifest,
+  type McpLauncherManifest,
 } from '../core/launcher/manifest.js';
+import type { YuanmengMcpToolProfile } from '../mcp/contracts.js';
+import { sourcePathEnvironment, type SourcePathSettings } from '../core/environment/source-paths.js';
 
 export interface CliLauncherInput {
+  sourcePaths?: SourcePathSettings;
   projectRoot: string;
   projectInstanceId: string;
   projectRootHash: string;
@@ -23,8 +28,23 @@ export interface CliLauncherInput {
 export interface CliLauncherResult {
   manifestPath: string;
   launcherPath: string;
+  validatorPath: string;
   changed: boolean;
 }
+
+export interface McpLauncherInput {
+  sourcePaths?: SourcePathSettings;
+  projectRoot: string;
+  projectInstanceId: string;
+  projectRootHash: string;
+  extensionRoot: string;
+  extensionVersion: string;
+  mcpPath: string;
+  toolProfile?: YuanmengMcpToolProfile;
+  generatedAt?: string;
+}
+
+export type McpLauncherResult = CliLauncherResult;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
@@ -52,61 +72,114 @@ function base64(value: string): string {
   return Buffer.from(value, 'utf8').toString('base64');
 }
 
-function renderLauncher(
-  manifest: CliLauncherManifest,
+function renderTargetValidator(
+  manifest: CliLauncherManifest | McpLauncherManifest,
   extensionRoot: string,
   projectRoot: string,
+  target: {
+    manifestName: string;
+    pathKey: 'cliPath' | 'mcpPath';
+    shaKey: 'cliSha256' | 'mcpSha256';
+    targetPath: string;
+    targetSha256: string;
+    bindingMessage: string;
+    fixedArguments?: readonly string[];
+  },
+  sourcePaths: SourcePathSettings,
 ): string {
-  const script = [
-    "$ErrorActionPreference='Stop'",
-    '$utf8=New-Object Text.UTF8Encoding($false);[Console]::OutputEncoding=$utf8;$OutputEncoding=$utf8',
-    '$manifestPath=$env:YMAI_MANIFEST',
-    "function Decode([string]$v){[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($v))}",
-    '$missing=Decode $env:YMAI_MSG_MISSING_B64',
-    "function Norm([string]$p){$v=[IO.Path]::GetFullPath($p).Replace([IO.Path]::DirectorySeparatorChar,'/').TrimEnd('/');if($v -match '^[A-Za-z]:'){$v=$v.Substring(0,1).ToLowerInvariant()+$v.Substring(1)};$v}",
-    "function HashText([string]$v){$h=[Security.Cryptography.SHA256]::Create();try{(($h.ComputeHash([Text.Encoding]::UTF8.GetBytes($v))|ForEach-Object{$_.ToString('x2')})-join '')}finally{$h.Dispose()}}",
-    "if(!(Test-Path -LiteralPath $manifestPath -PathType Leaf)){[Console]::Error.WriteLine($missing);exit 2}",
-    'try{$m=Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8|ConvertFrom-Json}catch{[Console]::Error.WriteLine($missing);exit 2}',
-    '$expectedCli=Decode $env:YMAI_EXPECTED_CLI_B64',
-    '$expectedRoot=Decode $env:YMAI_EXPECTED_ROOT_B64',
-    '$projectRoot=Decode $env:YMAI_PROJECT_ROOT_B64',
-    "if(!(Test-Path -LiteralPath $expectedCli -PathType Leaf)){[Console]::Error.WriteLine($missing);exit 2}",
-    "if(!(Test-Path -LiteralPath $expectedRoot -PathType Container)){[Console]::Error.WriteLine($missing);exit 2}",
-    'try{$cli=(Get-Item -LiteralPath $expectedCli).FullName;$root=(Get-Item -LiteralPath $expectedRoot).FullName;$project=(Get-Item -LiteralPath $projectRoot).FullName}catch{[Console]::Error.WriteLine($missing);exit 2}',
-    "$catalog=Join-Path (Split-Path -Parent $root) 'extensions.json';if(Test-Path -LiteralPath $catalog -PathType Leaf){try{$entries=@(Get-Content -LiteralPath $catalog -Raw -Encoding UTF8|ConvertFrom-Json);$registered=@($entries|Where-Object{$null-ne$_.identifier-and$_.identifier.id-eq$env:YMAI_EXTENSION_ID});if($registered.Count-eq0){[Console]::Error.WriteLine($missing);exit 2}}catch{[Console]::Error.WriteLine($missing);exit 2}}",
-    "$bad=($m.schemaVersion -ne 1)-or($m.extensionId -ne $env:YMAI_EXTENSION_ID)-or($m.extensionVersion -ne (Decode $env:YMAI_EXTENSION_VERSION_B64))-or($m.cliSha256 -ne $env:YMAI_EXPECTED_CLI_SHA)-or($m.projectInstanceId -ne $env:YMAI_PROJECT_ID)-or($m.projectRootHash -ne $env:YMAI_PROJECT_HASH)",
-    '$bad=$bad-or((Norm $m.cliPath)-ne(Norm $cli))-or((HashText (Norm $root))-ne $m.extensionRootHash)-or($m.extensionRootHash-ne$env:YMAI_EXTENSION_ROOT_HASH)-or((HashText (Norm $project))-ne$env:YMAI_PROJECT_HASH)',
-    '$prefix=$root.TrimEnd([IO.Path]::DirectorySeparatorChar)+[IO.Path]::DirectorySeparatorChar;$bad=$bad-or(!$cli.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase))',
-    "$metaPath=Join-Path $project '.yuanmeng-inspector/meta.json';if(!(Test-Path -LiteralPath $metaPath -PathType Leaf)){[Console]::Error.WriteLine((Decode $env:YMAI_MSG_BINDING_B64));exit 6}",
-    'try{$meta=Get-Content -LiteralPath $metaPath -Raw -Encoding UTF8|ConvertFrom-Json}catch{[Console]::Error.WriteLine((Decode $env:YMAI_MSG_BINDING_B64));exit 6}',
-    '$bad=$bad-or($meta.projectInstanceId-ne$env:YMAI_PROJECT_ID)-or($meta.projectRootHash-ne$env:YMAI_PROJECT_HASH)',
-    'if($bad){[Console]::Error.WriteLine((Decode $env:YMAI_MSG_VALIDATION_B64));exit 6}',
-    "Import-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Utility/Microsoft.PowerShell.Utility.psd1') -ErrorAction Stop",
-    '$actualHash=(Get-FileHash -LiteralPath $cli -Algorithm SHA256).Hash.ToLowerInvariant();if($actualHash-ne$env:YMAI_EXPECTED_CLI_SHA){[Console]::Error.WriteLine((Decode $env:YMAI_MSG_VALIDATION_B64));exit 6}',
-    '$node=Get-Command node -CommandType Application -ErrorAction SilentlyContinue|Select-Object -First 1;if($null-eq$node){[Console]::Error.WriteLine((Decode $env:YMAI_MSG_NODE_MISSING_B64));exit 2}',
-    "$version=& $node.Source --version 2>$null;if($LASTEXITCODE-ne 0-or$version-notmatch '^v([0-9]+)\\.') {[Console]::Error.WriteLine((Decode $env:YMAI_MSG_NODE_VERSION_B64));exit 2}",
-    'if([int]$Matches[1]-lt 20){[Console]::Error.WriteLine((Decode $env:YMAI_MSG_NODE_REQUIRED_B64));exit 2}',
-    "$forwarded=@();for($i=0;$i-lt[int]$env:YMAI_ARG_COUNT;$i++){$forwarded+=[Environment]::GetEnvironmentVariable(('YMAI_ARG_'+$i))};$nodeArgs=@($cli,'--launcher-manifest',$manifestPath,'--project',$project)+$forwarded;& $node.Source @nodeArgs;exit $LASTEXITCODE",
-  ].join(';');
+  const expected = {
+    sourceEnvironment: sourcePathEnvironment(sourcePaths, projectRoot),
+    targetPathB64: base64(target.targetPath),
+    targetSha256: target.targetSha256,
+    pathKey: target.pathKey,
+    shaKey: target.shaKey,
+    extensionRootB64: base64(extensionRoot),
+    extensionRootHash: manifest.extensionRootHash,
+    extensionId: manifest.extensionId,
+    extensionVersionB64: base64(manifest.extensionVersion),
+    projectRootB64: base64(projectRoot),
+    projectInstanceId: manifest.projectInstanceId,
+    projectRootHash: manifest.projectRootHash,
+    messages: {
+      missing: base64('元梦 AI 开发助手已卸载或安装路径失效'),
+      binding: base64(target.bindingMessage),
+      validation: base64(`${target.bindingMessage.replace('工程绑定无效', '')}校验失败`),
+      version: base64('需要 Node.js 20 或更高版本'),
+    },
+  };
+  const expectedProfile = target.fixedArguments?.[0] === '--profile'
+    ? target.fixedArguments[1] ?? null
+    : null;
+  return [
+    "'use strict';",
+    "const { createHash } = require('node:crypto');",
+    "const { spawnSync } = require('node:child_process');",
+    "const fs = require('node:fs');",
+    "const path = require('node:path');",
+    `const EXPECTED = ${JSON.stringify(expected)};`,
+    "const decode = (value) => Buffer.from(value, 'base64').toString('utf8');",
+    "const message = (key) => decode(EXPECTED.messages[key]);",
+    "const fail = (text, code) => { process.stderr.write(`${text}\\n`); process.exit(code); };",
+    "const readJson = (file, text, code) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { fail(text, code); } };",
+    "const normalize = (value) => { let result = path.resolve(value).replace(/\\\\/gu, '/').replace(/\\/+$/u, ''); if (/^[A-Za-z]:/u.test(result)) result = result[0].toLowerCase() + result.slice(1); return result; };",
+    "const hashText = (value) => createHash('sha256').update(value, 'utf8').digest('hex');",
+    "const hashFile = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');",
+    `const manifestPath = path.join(__dirname, ${JSON.stringify(target.manifestName)});`,
+    "const manifest = readJson(manifestPath, message('missing'), 2);",
+    "const expectedTarget = decode(EXPECTED.targetPathB64);",
+    "const expectedRoot = decode(EXPECTED.extensionRootB64);",
+    "const expectedProject = decode(EXPECTED.projectRootB64);",
+    "let executable; let root; let project;",
+    "try { if (!fs.statSync(expectedTarget).isFile() || !fs.statSync(expectedRoot).isDirectory() || !fs.statSync(expectedProject).isDirectory()) fail(message('missing'), 2); executable = fs.realpathSync(expectedTarget); root = fs.realpathSync(expectedRoot); project = fs.realpathSync(expectedProject); } catch { fail(message('missing'), 2); }",
+    "const child = path.relative(root, executable);",
+    "let bad = manifest.schemaVersion !== 1 || manifest.extensionId !== EXPECTED.extensionId || manifest.extensionVersion !== decode(EXPECTED.extensionVersionB64) || manifest[EXPECTED.shaKey] !== EXPECTED.targetSha256 || manifest.projectInstanceId !== EXPECTED.projectInstanceId || manifest.projectRootHash !== EXPECTED.projectRootHash;",
+    `bad ||= ${JSON.stringify(expectedProfile)} !== null && (manifest.toolProfile ?? 'full') !== ${JSON.stringify(expectedProfile)};`,
+    "bad ||= normalize(manifest[EXPECTED.pathKey]) !== normalize(executable) || hashText(normalize(root)) !== manifest.extensionRootHash || manifest.extensionRootHash !== EXPECTED.extensionRootHash || hashText(normalize(project)) !== EXPECTED.projectRootHash || child === '' || child.startsWith('..') || path.isAbsolute(child);",
+    "const catalogPath = path.join(path.dirname(root), 'extensions.json');",
+    "if (fs.existsSync(catalogPath)) { const entries = readJson(catalogPath, message('missing'), 2); if (!Array.isArray(entries) || !entries.some((entry) => entry && entry.identifier && entry.identifier.id === EXPECTED.extensionId)) fail(message('missing'), 2); }",
+    "const meta = readJson(path.join(project, '.yuanmeng-inspector', 'meta.json'), message('binding'), 6);",
+    "bad ||= meta.projectInstanceId !== EXPECTED.projectInstanceId || meta.projectRootHash !== EXPECTED.projectRootHash;",
+    "if (bad || hashFile(executable) !== EXPECTED.targetSha256) fail(message('validation'), 6);",
+    "const major = Number.parseInt(process.versions.node.split('.')[0] || '', 10);",
+    "if (!Number.isInteger(major) || major < 20) fail(message('version'), 2);",
+    "const argCount = Number.parseInt(process.env.YMAI_ARG_COUNT || '0', 10);",
+    "if (!Number.isInteger(argCount) || argCount < 0 || argCount > 512) fail(message('validation'), 6);",
+    "const forwarded = Array.from({ length: argCount }, (_unused, index) => process.env[`YMAI_ARG_${index}`] || '');",
+    `const childResult = spawnSync(process.execPath, [executable, '--launcher-manifest', manifestPath, '--project', project, ...${JSON.stringify(target.fixedArguments ?? [])}, ...forwarded], { stdio: 'inherit', env: { ...process.env, ...EXPECTED.sourceEnvironment } });`,
+    "process.exit(Number.isInteger(childResult.status) ? childResult.status : 2);",
+    '',
+  ].join('\n');
+}
+
+function renderNodeValidator(manifest: CliLauncherManifest, extensionRoot: string, projectRoot: string, sourcePaths: SourcePathSettings): string {
+  return renderTargetValidator(manifest, extensionRoot, projectRoot, {
+    manifestName: 'cli-launcher.json',
+    pathKey: 'cliPath',
+    shaKey: 'cliSha256',
+    targetPath: manifest.cliPath,
+    targetSha256: manifest.cliSha256,
+    bindingMessage: 'CLI 启动器工程绑定无效',
+  }, sourcePaths);
+}
+
+function renderMcpNodeValidator(manifest: McpLauncherManifest, extensionRoot: string, projectRoot: string, sourcePaths: SourcePathSettings): string {
+  return renderTargetValidator(manifest, extensionRoot, projectRoot, {
+    manifestName: 'mcp-launcher.json',
+    pathKey: 'mcpPath',
+    shaKey: 'mcpSha256',
+    targetPath: manifest.mcpPath,
+    targetSha256: manifest.mcpSha256,
+    bindingMessage: 'MCP 启动器工程绑定无效',
+    fixedArguments: ['--profile', manifest.toolProfile ?? 'full'],
+  }, sourcePaths);
+}
+
+function renderLauncher(validatorName = 'ymai.cjs'): string {
   return [
     '@echo off',
+    '"%SystemRoot%\\System32\\chcp.com" 65001 >nul',
     'setlocal',
-    'set "YMAI_MANIFEST=%~dp0cli-launcher.json"',
-    `set "YMAI_EXPECTED_CLI_B64=${base64(manifest.cliPath)}"`,
-    `set "YMAI_EXPECTED_CLI_SHA=${manifest.cliSha256}"`,
-    `set "YMAI_EXPECTED_ROOT_B64=${base64(extensionRoot)}"`,
-    `set "YMAI_EXTENSION_ROOT_HASH=${manifest.extensionRootHash}"`,
-    `set "YMAI_EXTENSION_ID=${manifest.extensionId}"`,
-    `set "YMAI_EXTENSION_VERSION_B64=${base64(manifest.extensionVersion)}"`,
-    `set "YMAI_PROJECT_ROOT_B64=${base64(projectRoot)}"`,
-    `set "YMAI_PROJECT_ID=${manifest.projectInstanceId}"`,
-    `set "YMAI_PROJECT_HASH=${manifest.projectRootHash}"`,
-    `set "YMAI_MSG_MISSING_B64=${base64('元梦 AI 开发助手已卸载或安装路径失效')}"`,
-    `set "YMAI_MSG_BINDING_B64=${base64('CLI 启动器工程绑定无效')}"`,
-    `set "YMAI_MSG_VALIDATION_B64=${base64('CLI 启动器校验失败')}"`,
-    `set "YMAI_MSG_NODE_MISSING_B64=${base64('未找到 Node.js 20 或更高版本')}"`,
-    `set "YMAI_MSG_NODE_VERSION_B64=${base64('无法确认 Node.js 版本')}"`,
-    `set "YMAI_MSG_NODE_REQUIRED_B64=${base64('需要 Node.js 20 或更高版本')}"`,
+    'set "YMAI_BIN_ROOT=%~dp0"',
     'set "YMAI_ARG_COUNT=0"',
     ':ymai_collect_args',
     'if "%~1"=="" goto ymai_run',
@@ -115,7 +188,9 @@ function renderLauncher(
     'shift',
     'goto ymai_collect_args',
     ':ymai_run',
-    `"%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "& { ${script} }"`,
+    'where node.exe >nul 2>nul',
+    'if errorlevel 1 (echo 未找到 Node.js 20 或更高版本 1>&2 & exit /b 2)',
+    `node.exe "%YMAI_BIN_ROOT%${validatorName}"`,
     'exit /b %ERRORLEVEL%',
     '',
   ].join('\r\n');
@@ -176,24 +251,54 @@ function sameIdentity(left: CliLauncherManifest, right: CliLauncherManifest): bo
     && left.projectRootHash === right.projectRootHash;
 }
 
-export async function createOrRefreshCliLauncher(input: CliLauncherInput): Promise<CliLauncherResult> {
+function sameMcpIdentity(left: McpLauncherManifest, right: McpLauncherManifest): boolean {
+  return left.extensionId === right.extensionId
+    && left.extensionVersion === right.extensionVersion
+    && left.extensionRootHash === right.extensionRootHash
+    && left.mcpPath === right.mcpPath
+    && left.mcpSha256 === right.mcpSha256
+    && left.projectInstanceId === right.projectInstanceId
+    && left.projectRootHash === right.projectRootHash
+    && (left.toolProfile ?? 'full') === (right.toolProfile ?? 'full');
+}
+
+interface PreparedLauncherTarget {
+  projectRoot: string;
+  extensionRoot: string;
+  targetPath: string;
+  targetSha256: string;
+  extensionRootHash: string;
+  generatedAt: string;
+}
+
+async function prepareLauncherTarget(
+  input: {
+    projectRoot: string;
+    projectInstanceId: string;
+    projectRootHash: string;
+    extensionRoot: string;
+    extensionVersion: string;
+    generatedAt?: string;
+  },
+  targetPathInput: string,
+  targetLabel: 'CLI' | 'MCP',
+): Promise<PreparedLauncherTarget> {
   if (
     !UUID_PATTERN.test(input.projectInstanceId)
     || !SHA256_PATTERN.test(input.projectRootHash)
     || input.extensionVersion.length === 0
   ) {
-    fail('CLI 启动器输入身份无效。');
+    fail(`${targetLabel} 启动器输入身份无效。`);
   }
-  const [projectRoot, extensionRoot, cliPath] = await Promise.all([
+  const [projectRoot, extensionRoot, targetPath] = await Promise.all([
     realpath(input.projectRoot),
     realpath(input.extensionRoot),
-    realpath(input.cliPath),
+    realpath(targetPathInput),
   ]);
-  if (!(await stat(cliPath)).isFile() || !isInside(extensionRoot, cliPath)) {
-    fail('CLI 目标必须是扩展安装目录内的文件。');
+  if (!(await stat(targetPath)).isFile() || !isInside(extensionRoot, targetPath)) {
+    fail(`${targetLabel} 目标必须是扩展安装目录内的文件。`);
   }
-  const actualProjectHash = sha256Hex(normalizeRoot(projectRoot));
-  if (actualProjectHash !== input.projectRootHash) {
+  if (sha256Hex(normalizeRoot(projectRoot)) !== input.projectRootHash) {
     fail('工程根目录指纹与启动器输入不匹配。');
   }
   let metadata: Record<string, unknown>;
@@ -207,15 +312,28 @@ export async function createOrRefreshCliLauncher(input: CliLauncherInput): Promi
   }
   const generatedAt = input.generatedAt ?? new Date().toISOString();
   if (!generatedAt.endsWith('Z') || !Number.isFinite(Date.parse(generatedAt))) {
-    fail('CLI 启动器生成时间无效。');
+    fail(`${targetLabel} 启动器生成时间无效。`);
   }
+  return {
+    projectRoot,
+    extensionRoot,
+    targetPath,
+    targetSha256: sha256Hex(await readFile(targetPath)),
+    extensionRootHash: sha256Hex(normalizeRoot(extensionRoot)),
+    generatedAt,
+  };
+}
+
+export async function createOrRefreshCliLauncher(input: CliLauncherInput): Promise<CliLauncherResult> {
+  const prepared = await prepareLauncherTarget(input, input.cliPath, 'CLI');
+  const { projectRoot, extensionRoot, targetPath: cliPath, generatedAt } = prepared;
   const manifest: CliLauncherManifest = {
     schemaVersion: 1,
     extensionId: EXTENSION_ID,
     extensionVersion: input.extensionVersion,
-    extensionRootHash: sha256Hex(normalizeRoot(extensionRoot)),
+    extensionRootHash: prepared.extensionRootHash,
     cliPath,
-    cliSha256: sha256Hex(await readFile(cliPath)),
+    cliSha256: prepared.targetSha256,
     projectInstanceId: input.projectInstanceId,
     projectRootHash: input.projectRootHash,
     generatedAt,
@@ -224,6 +342,7 @@ export async function createOrRefreshCliLauncher(input: CliLauncherInput): Promi
   const binRoot = join(projectRoot, '.yuanmeng-inspector', 'bin');
   const manifestPath = join(binRoot, 'cli-launcher.json');
   const launcherPath = join(binRoot, 'ymai.cmd');
+  const validatorPath = join(binRoot, 'ymai.cjs');
   let existing: CliLauncherManifest | null = null;
   try {
     const value: unknown = JSON.parse(await readFile(manifestPath, 'utf8'));
@@ -234,16 +353,66 @@ export async function createOrRefreshCliLauncher(input: CliLauncherInput): Promi
   }
   const effectiveManifest = existing !== null && sameIdentity(existing, manifest) ? existing : manifest;
   const manifestText = stableJson(effectiveManifest);
-  const launcherText = renderLauncher(effectiveManifest, extensionRoot, projectRoot);
+  const launcherText = renderLauncher();
+  const validatorText = renderNodeValidator(effectiveManifest, extensionRoot, projectRoot, input.sourcePaths ?? {});
   const unchanged = existing !== null
     && sameIdentity(existing, manifest)
     && await sameBytes(manifestPath, manifestText)
-    && await sameBytes(launcherPath, launcherText);
+    && await sameBytes(launcherPath, launcherText)
+    && await sameBytes(validatorPath, validatorText);
   if (unchanged) {
-    return { manifestPath, launcherPath, changed: false };
+    return { manifestPath, launcherPath, validatorPath, changed: false };
   }
   await atomicWriteText(join(projectRoot, '.yuanmeng-inspector', '.gitignore'), '*\n!.gitignore\n');
   await atomicWriteText(manifestPath, stableJson(manifest));
-  await atomicWriteText(launcherPath, renderLauncher(manifest, extensionRoot, projectRoot));
-  return { manifestPath, launcherPath, changed: true };
+  await atomicWriteText(validatorPath, renderNodeValidator(manifest, extensionRoot, projectRoot, input.sourcePaths ?? {}));
+  await atomicWriteText(launcherPath, renderLauncher());
+  return { manifestPath, launcherPath, validatorPath, changed: true };
+}
+
+export async function createOrRefreshMcpLauncher(input: McpLauncherInput): Promise<McpLauncherResult> {
+  const prepared = await prepareLauncherTarget(input, input.mcpPath, 'MCP');
+  const { projectRoot, extensionRoot, targetPath: mcpPath, generatedAt } = prepared;
+  const manifest: McpLauncherManifest = {
+    schemaVersion: 1,
+    extensionId: EXTENSION_ID,
+    extensionVersion: input.extensionVersion,
+    extensionRootHash: prepared.extensionRootHash,
+    mcpPath,
+    mcpSha256: prepared.targetSha256,
+    projectInstanceId: input.projectInstanceId,
+    projectRootHash: input.projectRootHash,
+    generatedAt,
+    toolProfile: input.toolProfile ?? 'full',
+  };
+  validateMcpLauncherManifest(manifest);
+  const binRoot = join(projectRoot, '.yuanmeng-inspector', 'bin');
+  const manifestPath = join(binRoot, 'mcp-launcher.json');
+  const launcherPath = join(binRoot, 'ymai-mcp.cmd');
+  const validatorPath = join(binRoot, 'ymai-mcp.cjs');
+  let existing: McpLauncherManifest | null = null;
+  try {
+    const value: unknown = JSON.parse(await readFile(manifestPath, 'utf8'));
+    validateMcpLauncherManifest(value);
+    existing = value;
+  } catch {
+    existing = null;
+  }
+  const effectiveManifest = existing !== null && sameMcpIdentity(existing, manifest) ? existing : manifest;
+  const manifestText = stableJson(effectiveManifest);
+  const launcherText = renderLauncher('ymai-mcp.cjs');
+  const validatorText = renderMcpNodeValidator(effectiveManifest, extensionRoot, projectRoot, input.sourcePaths ?? {});
+  const unchanged = existing !== null
+    && sameMcpIdentity(existing, manifest)
+    && await sameBytes(manifestPath, manifestText)
+    && await sameBytes(launcherPath, launcherText)
+    && await sameBytes(validatorPath, validatorText);
+  if (unchanged) {
+    return { manifestPath, launcherPath, validatorPath, changed: false };
+  }
+  await atomicWriteText(join(projectRoot, '.yuanmeng-inspector', '.gitignore'), '*\n!.gitignore\n');
+  await atomicWriteText(manifestPath, stableJson(manifest));
+  await atomicWriteText(validatorPath, renderMcpNodeValidator(manifest, extensionRoot, projectRoot, input.sourcePaths ?? {}));
+  await atomicWriteText(launcherPath, renderLauncher('ymai-mcp.cjs'));
+  return { manifestPath, launcherPath, validatorPath, changed: true };
 }

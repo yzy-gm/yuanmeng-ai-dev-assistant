@@ -1,56 +1,52 @@
-import { readFile } from 'node:fs/promises';
-import { isAbsolute, join, relative } from 'node:path';
+import { isAbsolute, relative } from 'node:path';
 
 import * as vscode from 'vscode';
 
 import {
-  buildApiIndex,
-  parseDeclarationFile,
+  searchApiSymbols,
   type ApiIndex,
 } from '../core/api/declaration-index.js';
+import { buildLuaApiKnowledge } from '../core/api/lua-knowledge.js';
+import { resolveEventMetadata, type EventDocumentationIndex } from '../core/api/event-doc-index.js';
+import { searchResourceCatalog, type ResourceCatalog } from '../core/api/resource-catalog.js';
 import { analyzeProject, type ProjectDiagnostic } from '../core/diagnostics/analyzer.js';
+import { filterEditorDiagnostics } from '../core/diagnostics/editor-policy.js';
 import { buildLuaSourceIndex, type LuaSourceIndex } from '../core/lua/source-index.js';
+import { KeyedDebouncer } from '../core/async/keyed-debouncer.js';
 import type { RegistryRecord, SourceRange } from '../core/model.js';
-import { discoverOfficialApiSource } from '../integrations/official/api-source.js';
+import { loadOfficialApiIndexFromExtensions } from '../integrations/official/api-index-loader.js';
+import { loadLocalEventDocumentation } from '../integrations/official/event-doc-source.js';
+import { loadLocalResourceCatalog } from '../integrations/official/resource-doc-source.js';
 import type { WorkspaceContextManager } from './workspaces.js';
 
-const EMPTY_API_INDEX: ApiIndex = {
-  schemaVersion: 1,
-  officialExtensionVersion: 'unknown',
-  declarations: [],
-};
+export const LANGUAGE_FEATURE_DEBOUNCE_MILLISECONDS = 250;
 
-function apiKnowledge(index: ApiIndex) {
-  return {
-    calls: index.declarations.map((declaration) => ({
-      qualifiedName: `${declaration.module}${declaration.callStyle === 'colon' ? ':' : '.'}${declaration.name}`,
-      idParameterIndexes: declaration.params.flatMap((parameter, parameterIndex) => (
-        /(?:id|uid)$/iu.test(parameter.name) && !/(?:signal|event)/iu.test(parameter.name) ? [parameterIndex] : []
-      )),
-      signalParameterIndexes: declaration.params.flatMap((parameter, parameterIndex) => (
-        /(?:signal|event)/iu.test(parameter.name) ? [parameterIndex] : []
-      )),
-    })),
-    configuredIdFields: [],
-  };
+export const apiKnowledge = buildLuaApiKnowledge;
+
+export async function loadApiIndex(): Promise<ApiIndex> {
+  const override = vscode.workspace.getConfiguration('yuanmengAi').get<string>('officialExtensionPath', '').trim();
+  return loadOfficialApiIndexFromExtensions(vscode.extensions.all.map((extension) => ({
+    id: extension.id,
+    extensionPath: extension.extensionPath,
+    packageJSON: extension.packageJSON,
+  })), override === '' ? null : override);
 }
 
-async function loadApiIndex(): Promise<ApiIndex> {
-  const override = vscode.workspace.getConfiguration('yuanmengAi').get<string>('officialExtensionPath', '').trim();
+async function loadEventDocumentation(): Promise<EventDocumentationIndex | null> {
+  const configured = vscode.workspace.getConfiguration('yuanmengAi').get<string>('eventsDocumentationPath', '').trim();
   try {
-    const source = await discoverOfficialApiSource(vscode.extensions.all.map((extension) => ({
-      id: extension.id,
-      extensionPath: extension.extensionPath,
-      packageJSON: extension.packageJSON,
-    })), override === '' ? null : override);
-    if (source.state !== 'selected') return EMPTY_API_INDEX;
-    const files = await Promise.all(source.declarationPaths.map(async (relativePath) => parseDeclarationFile({
-      relativePath,
-      source: await readFile(join(source.extensionRoot, ...relativePath.split('/')), 'utf8'),
-    })));
-    return buildApiIndex(files, { officialExtensionVersion: source.officialExtensionVersion });
+    return await loadLocalEventDocumentation(configured === '' ? null : configured);
   } catch {
-    return EMPTY_API_INDEX;
+    return null;
+  }
+}
+
+async function loadResourceDocumentation(): Promise<ResourceCatalog | null> {
+  const configured = vscode.workspace.getConfiguration('yuanmengAi').get<string>('resourceDocumentationPath', '').trim();
+  try {
+    return await loadLocalResourceCatalog(configured === '' ? null : configured);
+  } catch {
+    return null;
   }
 }
 
@@ -96,13 +92,24 @@ class LanguageFeatureEngine implements vscode.Disposable {
   readonly #manager: WorkspaceContextManager;
   readonly #diagnostics = vscode.languages.createDiagnosticCollection('元梦 AI');
   #apiIndexPromise: Promise<ApiIndex> | null = null;
+  #eventDocumentationPromise: Promise<EventDocumentationIndex | null> | null = null;
+  #resourceDocumentationPromise: Promise<ResourceCatalog | null> | null = null;
+  readonly #analysisCache = new Map<string, { version: number; promise: Promise<DocumentAnalysis | null> }>();
 
   constructor(manager: WorkspaceContextManager) {
     this.#manager = manager;
   }
 
   dispose(): void {
+    this.#analysisCache.clear();
     this.#diagnostics.dispose();
+  }
+
+  invalidate(): void {
+    this.#analysisCache.clear();
+    this.#apiIndexPromise = null;
+    this.#eventDocumentationPromise = null;
+    this.#resourceDocumentationPromise = null;
   }
 
   #apiIndex(): Promise<ApiIndex> {
@@ -110,8 +117,48 @@ class LanguageFeatureEngine implements vscode.Disposable {
     return this.#apiIndexPromise;
   }
 
+  async searchApiSymbols(query: string) {
+    const [index, documentation] = await Promise.all([
+      this.#apiIndex(),
+      (this.#eventDocumentationPromise ??= loadEventDocumentation()),
+    ]);
+    const events = new Map(resolveEventMetadata(index, documentation).map((event) => [event.name, event]));
+    return searchApiSymbols(index, query).map((symbol) => ({
+      symbol,
+      eventMetadata: symbol.kind === 'constant' && symbol.module === 'Events'
+        ? events.get(symbol.name) ?? null
+        : null,
+      eventDocumentationState: documentation === null ? 'missing' as const : 'loaded-unversioned-local-doc' as const,
+    }));
+  }
+
+  async searchResources(query: string) {
+    const catalog = await (this.#resourceDocumentationPromise ??= loadResourceDocumentation());
+    return catalog === null ? { results: [], issues: [], state: 'missing' as const } : {
+      results: searchResourceCatalog(catalog, query),
+      issues: catalog.issues,
+      state: 'loaded-unversioned-local-doc' as const,
+    };
+  }
+
   async analyze(document: vscode.TextDocument): Promise<DocumentAnalysis | null> {
     if (document.uri.scheme !== 'file' || !document.fileName.toLocaleLowerCase().endsWith('.lua')) return null;
+    const cacheKey = document.uri.toString();
+    const cached = this.#analysisCache.get(cacheKey);
+    if (cached?.version === document.version) return cached.promise;
+    const promise = this.#analyzeCurrentDocument(document);
+    this.#analysisCache.set(cacheKey, { version: document.version, promise });
+    void promise.then(
+      () => undefined,
+      () => {
+        const current = this.#analysisCache.get(cacheKey);
+        if (current?.promise === promise) this.#analysisCache.delete(cacheKey);
+      },
+    );
+    return promise;
+  }
+
+  async #analyzeCurrentDocument(document: vscode.TextDocument): Promise<DocumentAnalysis | null> {
     const context = this.#manager.list().find((candidate) => documentPath(candidate.project.root, document.fileName) !== null);
     if (context === undefined) return null;
     const path = documentPath(context.project.root, document.fileName)!;
@@ -141,12 +188,14 @@ class LanguageFeatureEngine implements vscode.Disposable {
 
   async publish(document: vscode.TextDocument): Promise<void> {
     try {
+      const version = document.version;
       const analysis = await this.analyze(document);
+      if (document.version !== version) return;
       if (analysis === null) {
         this.#diagnostics.delete(document.uri);
         return;
       }
-      this.#diagnostics.set(document.uri, analysis.diagnostics.map((item) => {
+      this.#diagnostics.set(document.uri, filterEditorDiagnostics(analysis.diagnostics).map((item) => {
         const diagnostic = new vscode.Diagnostic(
           item.range === null ? new vscode.Range(0, 0, 0, 1) : vscodeRange(item.range),
           `${item.message} 下一步：${item.nextAction}`,
@@ -156,7 +205,10 @@ class LanguageFeatureEngine implements vscode.Disposable {
         diagnostic.source = '元梦 AI';
         return diagnostic;
       }));
-    } catch {
+    } catch (error) {
+      // API/Lua diagnostics belong to the official helper and Lua tooling.
+      // Do not turn an unavailable private index into a second Problems source.
+      void error;
       this.#diagnostics.delete(document.uri);
     }
   }
@@ -233,19 +285,35 @@ export function registerLanguageFeatures(
 ): void {
   const engine = new LanguageFeatureEngine(manager);
   const selector: vscode.DocumentSelector = [{ language: 'lua', scheme: 'file' }];
+  const debouncer = new KeyedDebouncer();
+  const schedulePublish = (document: vscode.TextDocument, delayMilliseconds: number): void => {
+    debouncer.schedule(document.uri.toString(), () => { void engine.publish(document); }, delayMilliseconds);
+  };
   const refreshOpenDocuments = (): void => {
-    for (const document of vscode.workspace.textDocuments) void engine.publish(document);
+    engine.invalidate();
+    for (const document of vscode.workspace.textDocuments) schedulePublish(document, 0);
   };
   const codeLensEmitter = new vscode.EventEmitter<void>();
   context.subscriptions.push(
     engine,
     codeLensEmitter,
-    vscode.workspace.onDidOpenTextDocument((document) => { void engine.publish(document); }),
-    vscode.workspace.onDidChangeTextDocument((event) => { void engine.publish(event.document); }),
-    vscode.workspace.onDidSaveTextDocument((document) => { void engine.publish(document); }),
+    debouncer,
+    vscode.workspace.onDidOpenTextDocument((document) => schedulePublish(document, 0)),
+    vscode.workspace.onDidChangeTextDocument((event) => schedulePublish(event.document, LANGUAGE_FEATURE_DEBOUNCE_MILLISECONDS)),
+    vscode.workspace.onDidSaveTextDocument((document) => schedulePublish(document, 0)),
+    vscode.workspace.onDidCloseTextDocument((document) => debouncer.cancel(document.uri.toString())),
     manager.onDidChange(() => {
       refreshOpenDocuments();
       codeLensEmitter.fire();
+    }),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (
+        event.affectsConfiguration('yuanmengAi.officialExtensionPath')
+        || event.affectsConfiguration('yuanmengAi.eventsDocumentationPath')
+        || event.affectsConfiguration('yuanmengAi.resourceDocumentationPath')
+      ) {
+        refreshOpenDocuments();
+      }
     }),
     vscode.languages.registerHoverProvider(selector, {
       provideHover: async (document, position) => {
@@ -286,7 +354,43 @@ export function registerLanguageFeatures(
         : `注册中心记录：${recordId}`);
     }),
     vscode.commands.registerCommand('yuanmengAi.searchApi', async () => {
-      await vscode.window.showInputBox({ prompt: '输入官方 API 中文说明或英文名称' });
+      const query = await vscode.window.showInputBox({ prompt: '输入官方函数、事件、常量、枚举中文说明或英文名称' });
+      if (query === undefined || query.trim() === '') return undefined;
+      const [results, resourceSearch] = await Promise.all([
+        engine.searchApiSymbols(query),
+        engine.searchResources(query),
+      ]);
+      if (results.length === 0 && resourceSearch.results.length === 0) {
+        void vscode.window.showWarningMessage('当前官方 API 声明和本地通用数据定义中没有匹配项。');
+        return { api: [], resources: [] };
+      }
+      const apiItems = results.slice(0, 200).map((entry) => ({
+        label: entry.symbol.kind === 'function'
+          ? entry.symbol.signature
+          : entry.symbol.kind === 'constant'
+            ? `${entry.symbol.module}.${entry.symbol.name} = ${JSON.stringify(entry.symbol.value)}`
+            : `${entry.symbol.module}.${entry.symbol.name}`,
+        description: `${entry.symbol.kind} · 官方扩展 ${entry.symbol.officialExtensionVersion}`,
+        detail: entry.eventMetadata === null
+          ? `${entry.symbol.description || '无说明'} · ${entry.symbol.source.relativePath}`
+          : `${entry.eventMetadata.scope} · 回调 ${entry.eventMetadata.callbackState} · 生成 ${entry.eventMetadata.generationEligibility}`,
+        value: { kind: 'api' as const, entry },
+      }));
+      const resourceItems = resourceSearch.results.slice(0, 200).map((entry) => ({
+        label: `${entry.name} = ${entry.id}`,
+        description: `${entry.domain} · 本地通用数据定义`,
+        detail: `${entry.categories.join(' / ') || '无分类'} · ${entry.sources.map((source) => source.relativePath).join('、')}`,
+        value: { kind: 'resource' as const, entry },
+      }));
+      const selected = await vscode.window.showQuickPick([...apiItems, ...resourceItems], {
+        placeHolder: `找到 ${results.length} 个官方声明符号、${resourceSearch.results.length} 个资源条目`,
+      });
+      if (selected !== undefined) {
+        const content = `${JSON.stringify(selected.value, null, 2)}\n`;
+        const document = await vscode.workspace.openTextDocument({ content, language: 'json' });
+        await vscode.window.showTextDocument(document, { preview: true });
+      }
+      return { api: results, resources: resourceSearch.results, resourceIssues: resourceSearch.issues };
     }),
   );
   refreshOpenDocuments();

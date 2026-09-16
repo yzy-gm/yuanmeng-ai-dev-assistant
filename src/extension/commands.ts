@@ -6,7 +6,7 @@ import { ProductError } from '../core/errors.js';
 import { BuildWorkflow } from '../core/build/workflow.js';
 import { atomicWriteText, nodeFileIO } from '../core/fs.js';
 import { sha256Hex, stableJson } from '../core/hash.js';
-import type { UiNode } from '../core/model.js';
+import type { UiNode, UiSnapshot } from '../core/model.js';
 import type { RegistryRecord } from '../core/model.js';
 import { createPatchProposal } from '../core/patch/proposal.js';
 import {
@@ -27,6 +27,21 @@ import type { WorkspaceContextManager } from './workspaces.js';
 import { runWizard } from './wizard.js';
 import { waitForStableExport } from '../integrations/official/files.js';
 import { aggregateLog, parseImportedLog } from '../core/logs/parser.js';
+import { containsGameplayTraceMarker, parseGameplayTraceLog } from '../core/logs/gameplay-trace.js';
+import { containsUiGeometryMarker, parseUiGeometryProbeLog } from '../core/ui/runtime-geometry.js';
+import {
+  containsUiRuntimeWidgetMarker,
+  containsUiScreenPointMarker,
+  parseUiRuntimeWidgetProbeLog,
+  parseUiScreenPointProbeLog,
+} from '../core/ui/runtime-inspection.js';
+import {
+  containsSceneProbeMarker,
+  createRuntimeOnlyProbeContext,
+  parseSceneProbeLog,
+  saveSceneProbeEvidence,
+} from '../core/scene/probe-evidence.js';
+import { loadSceneHeads, loadSceneSnapshot } from '../core/scene/store.js';
 
 function messageFor(error: unknown): string {
   if (error instanceof ProductError) {
@@ -44,6 +59,16 @@ function luaConstantName(name: string): string {
 async function optionalHash(path: string): Promise<string | null> {
   try {
     return sha256Hex(await nodeFileIO.readBytes(path));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+async function optionalSignature(path: string): Promise<string | null> {
+  try {
+    const value = await nodeFileIO.stat(path);
+    return value.isFile() ? `${value.size}:${value.mtimeMs}` : null;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw error;
@@ -108,6 +133,7 @@ export function registerCommands(
   searchResults: SearchResultsProvider,
   copyCliCommand: (root?: string) => Promise<void>,
   patchPreview: PatchPreviewController,
+  onSceneEvidenceImported?: (root: string) => Promise<void>,
 ): void {
   const register = (command: string, handler: (...args: unknown[]) => Promise<unknown>): void => {
     context.subscriptions.push(vscode.commands.registerCommand(command, async (...args) => {
@@ -124,9 +150,24 @@ export function registerCommands(
   register('yuanmengAi.refreshUi', async (root) => {
     const target = await manager.choose(typeof root === 'string' ? root : undefined);
     const refresh = await manager.refreshUi(target.project.root);
+    if (refresh.layerOrderGuard.state === 'reversal-detected') {
+      const groups = refresh.layerOrderGuard.reversedGroups
+        .map((group) => group.parentPath)
+        .slice(0, 3)
+        .join('、');
+      await vscode.window.showWarningMessage(
+        `检测到 ${refresh.layerOrderGuard.reversedGroups.length} 个控件组疑似整体完全倒序（${groups}）。`
+        + '插件已保留上一份可信层级基线，不会自动改写元梦地图；请先暂停保存并检查编辑器层级。'
+        + (refresh.layerOrderIncidentRelativePath === null
+          ? ''
+          : ` 证据：${refresh.layerOrderIncidentRelativePath}`),
+      );
+      return refresh;
+    }
     await vscode.window.showInformationMessage(refresh.reasonCode === 'REFRESH_SUCCEEDED_UNCHANGED'
-      ? '结构无变化，继续使用现有快照。'
+      ? '已检查 UI，内容未变化；现有快照仍为最新。'
       : '已通过官方“获取自定义界面结构”读取更新后的文件，并建立本机索引。');
+    return refresh;
   });
   register('yuanmengAi.findUi', async (queryValue, root) => {
     const query = typeof queryValue === 'string'
@@ -147,6 +188,21 @@ export function registerCommands(
     return result;
   });
   register('yuanmengAi.openWizard', async () => runWizard(manager));
+  register('yuanmengAi.setMapDisplayName', async (root, suppliedName) => {
+    const target = await manager.choose(typeof root === 'string' ? root : undefined);
+    const name = typeof suppliedName === 'string'
+      ? suppliedName
+      : await vscode.window.showInputBox({
+        title: '设置当前地图名称',
+        prompt: '该名称只用于本机显示和 AI 识别，不改变官方地图身份。',
+        value: target.mapDisplayName ?? target.project.mapName ?? '',
+        placeHolder: '例如：星光超市',
+      });
+    if (name === undefined) return undefined;
+    const saved = await manager.setMapDisplayName(target.project.root, name);
+    void vscode.window.showInformationMessage(`当前地图名称已保存：${saved}`);
+    return saved;
+  });
   register('yuanmengAi.copyCliCommand', async (root) => copyCliCommand(typeof root === 'string' ? root : undefined));
   register('yuanmengAi.copyUiId', async (node) => {
     const value = node as UiNode;
@@ -159,6 +215,38 @@ export function registerCommands(
   register('yuanmengAi.copyLuaConstant', async (node) => {
     const value = node as UiNode;
     await vscode.env.clipboard.writeText(`${luaConstantName(value.name)} = ${JSON.stringify(value.id)}`);
+  });
+  register('yuanmengAi.importSceneIdFromClipboard', async (root, suppliedName, simulatedDecision) => {
+    const target = await manager.choose(typeof root === 'string' ? root : undefined);
+    // Privacy boundary: clipboard access happens only inside this explicit command.
+    const value = (await vscode.env.clipboard.readText()).trim();
+    if (!/^[1-9]\d*$/u.test(value)) {
+      throw new ProductError('VALIDATION_FAILED', '剪贴板内容不是有效的十进制场景实例 ID。', ['在元梦编辑器复制实例 ID 后重新运行此命令。'], 'STATIC_LOCAL');
+    }
+    const name = typeof suppliedName === 'string' && suppliedName.trim() !== ''
+      ? suppliedName.trim()
+      : await vscode.window.showInputBox({
+        prompt: '为这个场景实例填写便于识别的登记名称',
+        value: `场景元件 ${value}`,
+        validateInput: (input) => input.trim() === '' ? '登记名称不能为空' : null,
+      });
+    if (name === undefined) return { committed: false, value };
+    const preview = await manager.previewClipboardSceneId(target.project.root, value, name);
+    const canSimulate = context.extensionMode !== vscode.ExtensionMode.Production;
+    const simulated = canSimulate && (simulatedDecision === 'confirm' || simulatedDecision === 'cancel')
+      ? simulatedDecision
+      : undefined;
+    const confirmed = simulated === undefined
+      ? await vscode.window.showWarningMessage(
+        `将场景实例 ID ${value} 登记到工程“${basename(target.project.root)}”。记录保持 pending，且不会写回元梦场景文件。`,
+        { modal: true, detail: `新增 ${preview.added.length}，修改 ${preview.changed.length}，替换同工程同 ID 记录 ${preview.removed.length}。` },
+        '确认登记',
+      ) === '确认登记'
+      : simulated === 'confirm';
+    if (!confirmed) return { committed: false, value };
+    await manager.commitRegistryImport(target.project.root, preview);
+    void vscode.window.showInformationMessage(`已登记场景实例 ID ${value}；来源为用户显式剪贴板导入，状态为 pending。`);
+    return { committed: true, value };
   });
   register('yuanmengAi.importRegistry', async (root) => {
     const target = await manager.choose(typeof root === 'string' ? root : undefined);
@@ -274,6 +362,7 @@ export function registerCommands(
     });
     const path = join(managed.project.root, 'src', 'Data', target.filename);
     const baseline = await optionalHash(path);
+    const baselineSignature = await optionalSignature(path);
     const capabilities = await manager.detectOfficialCapabilities();
     if (!capabilities.getCustomProperty) {
       throw new ProductError('OFFICIAL_COMMAND_MISSING', '官方获取自定义属性命令不可用。', ['启用官方元梦开发助手。'], 'STATIC_LOCAL');
@@ -290,9 +379,16 @@ export function registerCommands(
       io: nodeFileIO,
       paths: [path],
       baselineHashes: { [path]: baseline },
+      baselineSignatures: { [path]: baselineSignature },
+      acceptUnchangedStableFiles: true,
+      requireSignatureChangeForUnchanged: true,
       sampleMilliseconds: configuration.get<number>('fileStableSampleMilliseconds', 150),
       stableSampleCount: configuration.get<number>('fileStableSampleCount', 3),
-      totalTimeoutMilliseconds: configuration.get<number>('uiRefreshTimeoutSeconds', 15) * 1_000,
+      totalTimeoutMilliseconds: configuration.get<number>('propertyReadTimeoutSeconds', 120) * 1_000,
+      timeoutError: {
+        message: '等待官方“获取元件自定义属性”导出超时。',
+        nextActions: ['确认已在官方属性面板填写元件ID并点击“确认”，且当前工程与官方联动在线后重试。'],
+      },
       validateContent: (_path, source) => { createPropertySnapshot(source, new Date().toISOString()); },
     });
     validatePropertyFilename(target, basename(stable.files[0]!.path));
@@ -304,6 +400,9 @@ export function registerCommands(
       snapshot,
       diff: previous === null ? null : diffPropertySnapshots(previous, snapshot),
       state: workflow.state,
+      outcome: Object.keys(snapshot.values).length === 0
+        ? 'READ_SUCCEEDED_EMPTY_PROPERTIES'
+        : 'READ_SUCCEEDED',
       evidence: context.extensionMode === vscode.ExtensionMode.Production ? 'OFFICIAL_EDITOR_SINGLE' : 'EXTENSION_HOST',
     };
   });
@@ -377,22 +476,178 @@ export function registerCommands(
       diff: previous === null ? null : diffPropertySnapshots(previous, writtenSnapshot),
     };
   });
-  register('yuanmengAi.importLog', async (root) => {
+  register('yuanmengAi.importLog', async (root, suppliedPath) => {
     const managed = await manager.choose(typeof root === 'string' ? root : undefined);
-    const selected = await vscode.window.showOpenDialog({
-      canSelectFiles: true,
-      canSelectFolders: false,
-      canSelectMany: false,
-      title: '选择要导入的本机日志文件',
-      filters: { '日志文本': ['log', 'txt'] },
-    });
-    const uri = selected?.[0];
+    const uri = typeof suppliedPath === 'string'
+      ? vscode.Uri.file(suppliedPath)
+      : (await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectFolders: false,
+        canSelectMany: false,
+        title: '选择要导入的本机日志文件',
+        filters: { '日志文本': ['log', 'txt'] },
+      }))?.[0];
     if (uri === undefined) return undefined;
-    const parsed = parseImportedLog(await vscode.workspace.fs.readFile(uri));
+    const bytes = await vscode.workspace.fs.readFile(uri);
+    if (containsUiScreenPointMarker(bytes) || containsUiRuntimeWidgetMarker(bytes)) {
+      let snapshot: UiSnapshot;
+      try {
+        const raw: unknown = JSON.parse(await nodeFileIO.readFile(
+          join(managed.project.root, '.yuanmeng-inspector', 'ui', 'current.json'),
+          'utf8',
+        ));
+        if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw new Error('invalid snapshot');
+        const candidate = raw as Partial<UiSnapshot>;
+        if (
+          candidate.schemaVersion !== 1
+          || typeof candidate.snapshotId !== 'string'
+          || candidate.projectInstanceId !== managed.project.projectInstanceId
+          || !Array.isArray(candidate.nodes)
+        ) throw new Error('snapshot mismatch');
+        snapshot = candidate as UiSnapshot;
+      } catch (error) {
+        throw new ProductError(
+          'UI_RUNTIME_EVIDENCE_INSUFFICIENT',
+          '当前工程没有可绑定的有效 UI 快照。',
+          ['先刷新 UI 索引，再导入同一次试玩日志。'],
+          'STATIC_LOCAL',
+          error,
+        );
+      }
+      let uiScreenPointOutput: string | null = null;
+      let uiScreenPoint: ReturnType<typeof parseUiScreenPointProbeLog> | null = null;
+      let uiRuntimeWidgetsOutput: string | null = null;
+      let uiRuntimeWidgets: ReturnType<typeof parseUiRuntimeWidgetProbeLog> | null = null;
+      if (containsUiScreenPointMarker(bytes)) {
+        uiScreenPoint = parseUiScreenPointProbeLog(bytes, { snapshot });
+        const directory = join(managed.project.root, '.yuanmeng-inspector', 'ui', 'screen-points');
+        uiScreenPointOutput = join(directory, `${uiScreenPoint.runtimeSnapshotId}.json`);
+        await atomicWriteText(nodeFileIO, uiScreenPointOutput, stableJson(uiScreenPoint));
+        await atomicWriteText(nodeFileIO, join(directory, 'current.json'), stableJson(uiScreenPoint));
+      }
+      if (containsUiRuntimeWidgetMarker(bytes)) {
+        uiRuntimeWidgets = parseUiRuntimeWidgetProbeLog(bytes, { snapshot });
+        const directory = join(managed.project.root, '.yuanmeng-inspector', 'ui', 'runtime-widgets');
+        uiRuntimeWidgetsOutput = join(directory, `${uiRuntimeWidgets.runtimeSnapshotId}.json`);
+        await atomicWriteText(nodeFileIO, uiRuntimeWidgetsOutput, stableJson(uiRuntimeWidgets));
+        await atomicWriteText(nodeFileIO, join(directory, 'current.json'), stableJson(uiRuntimeWidgets));
+      }
+      void vscode.window.showInformationMessage(
+        `已导入${uiScreenPoint === null ? '' : '屏幕点命中'}${uiScreenPoint !== null && uiRuntimeWidgets !== null ? '与' : ''}${uiRuntimeWidgets === null ? '' : `${uiRuntimeWidgets.entries.length} 条运行时控件`}证据；未保存原始日志行。`,
+      );
+      return { output: null, parsed: null, aggregate: null, uiScreenPointOutput, uiScreenPoint, uiRuntimeWidgetsOutput, uiRuntimeWidgets };
+    }
+    if (containsUiGeometryMarker(bytes)) {
+      let snapshot: { snapshotId: string; projectInstanceId: string };
+      try {
+        const raw: unknown = JSON.parse(await nodeFileIO.readFile(
+          join(managed.project.root, '.yuanmeng-inspector', 'ui', 'current.json'),
+          'utf8',
+        ));
+        if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw new Error('invalid snapshot');
+        const candidate = raw as Record<string, unknown>;
+        if (typeof candidate.snapshotId !== 'string' || candidate.projectInstanceId !== managed.project.projectInstanceId) {
+          throw new Error('snapshot mismatch');
+        }
+        snapshot = { snapshotId: candidate.snapshotId, projectInstanceId: candidate.projectInstanceId };
+      } catch (error) {
+        throw new ProductError(
+          'UI_GEOMETRY_EVIDENCE_INSUFFICIENT',
+          '当前工程没有可绑定的有效 UI 快照。',
+          ['先刷新 UI 索引，再导入同一次试玩日志。'],
+          'STATIC_LOCAL',
+          error,
+        );
+      }
+      const uiGeometry = parseUiGeometryProbeLog(bytes, {
+        context: { projectInstanceId: snapshot.projectInstanceId, uiSnapshotId: snapshot.snapshotId },
+      });
+      const runtimeDirectory = join(managed.project.root, '.yuanmeng-inspector', 'ui', 'runtime');
+      const uiGeometryOutput = join(runtimeDirectory, `${uiGeometry.runtimeSnapshotId}.json`);
+      await atomicWriteText(nodeFileIO, uiGeometryOutput, stableJson(uiGeometry));
+      await atomicWriteText(nodeFileIO, join(runtimeDirectory, 'current.json'), stableJson(uiGeometry));
+      const successful = uiGeometry.entries.filter((entry) => entry.status === 'ok').length;
+      void vscode.window.showInformationMessage(`已绑定 ${successful}/${uiGeometry.selectedIds.length} 个控件的运行时屏幕几何；未保存原始日志行。`);
+      return { output: null, parsed: null, aggregate: null, uiGeometryOutput, uiGeometry };
+    }
+    if (containsSceneProbeMarker(bytes)) {
+      const heads = await loadSceneHeads(managed.project.root, nodeFileIO);
+      let sceneEvidence: ReturnType<typeof parseSceneProbeLog>;
+      if (heads.preferredSnapshotId !== null) {
+        const snapshot = await loadSceneSnapshot(managed.project.root, heads.preferredSnapshotId, nodeFileIO);
+        sceneEvidence = parseSceneProbeLog(bytes, {
+          context: {
+            projectInstanceId: managed.project.projectInstanceId,
+            bindingId: snapshot.bindingId,
+            snapshotId: snapshot.snapshotId,
+            sceneSourceSha256: snapshot.sourceSha256,
+          },
+        });
+      } else {
+        const candidates = (await manager.listRegistry(managed.project.root)).filter((record) => (
+          record.kind === 'scene-instance'
+          && record.projectInstanceId === managed.project.projectInstanceId
+        ));
+        const matches = [];
+        for (const record of candidates) {
+          try {
+            matches.push(parseSceneProbeLog(bytes, {
+              context: createRuntimeOnlyProbeContext(
+                managed.project.projectInstanceId,
+                record.recordId,
+                record.source.sha256,
+              ),
+            }));
+          } catch (error) {
+            if (!(error instanceof ProductError) || error.code !== 'SCENE_EVIDENCE_INSUFFICIENT') throw error;
+          }
+        }
+        if (matches.length === 0) {
+          throw new ProductError(
+            'SCENE_EVIDENCE_INSUFFICIENT',
+            '当前工程没有可绑定的场景快照，且日志未匹配任何已显式登记的场景实例。',
+            ['先显式登记官方编辑器当前选中元件 ID，再重新生成并导入同一份 runtime-only 探针日志。'],
+            'STATIC_LOCAL',
+          );
+        }
+        if (matches.length > 1) {
+          throw new ProductError(
+            'SCENE_EVIDENCE_INSUFFICIENT',
+            '日志同时匹配多个显式登记实例，无法安全确定目标。',
+            ['为当前目标保留唯一登记记录后重新导入日志。'],
+            'STATIC_LOCAL',
+          );
+        }
+        sceneEvidence = matches[0]!;
+        void vscode.window.showInformationMessage('已导入 runtime-only 场景探针证据；当前工程仍没有完整 LayerData 场景快照。');
+      }
+      const sceneEvidenceOutput = await saveSceneProbeEvidence(managed.project.root, sceneEvidence, nodeFileIO);
+      await onSceneEvidenceImported?.(managed.project.root);
+      if (sceneEvidence.issues.length > 0 || sceneEvidence.entries.length === 0) {
+        void vscode.window.showWarningMessage(`场景探针日志已绑定当前快照，但有 ${sceneEvidence.issues.length} 个问题，证据不足以生成执行代码。`);
+      } else {
+        void vscode.window.showInformationMessage(`已导入并绑定 ${sceneEvidence.entries.length} 条当前场景探针证据。`);
+      }
+      return { output: null, parsed: null, aggregate: null, sceneEvidenceOutput, sceneEvidence };
+    }
+    if (containsGameplayTraceMarker(bytes)) {
+      const gameplayTrace = parseGameplayTraceLog(bytes);
+      const gameplayTraceOutput = join(
+        managed.project.root,
+        '.yuanmeng-inspector',
+        'gameplay',
+        'trace-evidence',
+        `${gameplayTrace.sourceHash}.json`,
+      );
+      await atomicWriteText(nodeFileIO, gameplayTraceOutput, stableJson(gameplayTrace));
+      void vscode.window.showInformationMessage(`已导入 ${gameplayTrace.entries.length} 条结构化玩法日志；未保存原始日志行。`);
+      return { output: null, parsed: null, aggregate: null, gameplayTraceOutput, gameplayTrace };
+    }
+    const parsed = parseImportedLog(bytes);
     const output = join(managed.project.root, '.yuanmeng-inspector', 'logs', 'imported', `${parsed.sourceHash}.json`);
     await atomicWriteText(nodeFileIO, output, stableJson(parsed));
     const aggregate = aggregateLog(parsed);
-    void vscode.window.showInformationMessage(`已导入 ${parsed.entries.length} 行本机日志；本机日志不会证明官方编辑器或多人实测。`);
-    return { output, parsed, aggregate };
+    void vscode.window.showInformationMessage(`已导入 ${parsed.entries.length} 行本机日志；未发现场景探针标记。`);
+    return { output, parsed, aggregate, sceneEvidenceOutput: null, sceneEvidence: null };
   });
 }
