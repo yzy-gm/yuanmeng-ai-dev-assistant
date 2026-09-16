@@ -9,7 +9,6 @@ export type ImportedLogKind = 'structured' | 'unknown' | 'malformed-prefix';
 export interface ImportedLogEntry {
   line: number;
   kind: ImportedLogKind;
-  raw: string;
   timestamp: string | null;
   level: ImportedLogLevel | null;
   player: string | null;
@@ -40,6 +39,19 @@ export interface LogAggregate {
   unknownLines: number;
 }
 
+const MAX_PERSISTED_MESSAGE_CHARACTERS = 512;
+const REDACTED_UNKNOWN_MESSAGE = '未识别日志内容（原文未保存）';
+
+function safeMessage(value: string): string {
+  const redacted = value
+    .replace(/\b[A-Za-z]:\\[^\r\n，。；;]*/gu, '[本机路径]')
+    .replace(/(?:https?:\/\/|file:\/\/)[^\s，。；;]+/giu, '[本机地址]')
+    .replace(/\b(?:password|passwd|pwd|token|secret|authorization)\s*[:=]\s*[^\s，。；;]+/giu, '$1=[已隐藏]');
+  return redacted.length <= MAX_PERSISTED_MESSAGE_CHARACTERS
+    ? redacted
+    : `${redacted.slice(0, MAX_PERSISTED_MESSAGE_CHARACTERS - 1)}…`;
+}
+
 function parseBoundary(value: string | undefined, label: string): number | null {
   if (value === undefined) return null;
   const time = Date.parse(value);
@@ -57,21 +69,47 @@ function decode(bytes: Uint8Array): string {
   }
 }
 
-function emptyEntry(line: number, raw: string, kind: Exclude<ImportedLogKind, 'structured'>): ImportedLogEntry {
+/** 官方编辑器日志使用无时区的本机时间；ISO 日志仍按其自带时区解析。 */
+export function parseLogTimestamp(value: string): number | null {
+  if (/^\d{4}-\d{2}-\d{2}T/u.test(value)) {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/u.exec(value);
+  if (match === null) return null;
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, millisecondText = '0'] = match;
+  const values = [yearText, monthText, dayText, hourText, minuteText, secondText].map(Number);
+  const [year, month, day, hour, minute, second] = values;
+  const millisecond = Number(millisecondText.padEnd(3, '0'));
+  if ([year, month, day, hour, minute, second, millisecond].some((part) => !Number.isInteger(part))) return null;
+  const date = new Date(year!, month! - 1, day!, hour!, minute!, second!, millisecond);
+  return date.getFullYear() === year && date.getMonth() === month! - 1 && date.getDate() === day
+    && date.getHours() === hour && date.getMinutes() === minute && date.getSeconds() === second
+    ? date.getTime()
+    : null;
+}
+
+function emptyEntry(line: number, kind: Exclude<ImportedLogKind, 'structured'>): ImportedLogEntry {
   return {
-    line, kind, raw, timestamp: null, level: null, player: null, request: null,
-    signal: null, stage: null, message: raw,
+    line, kind, timestamp: null, level: null, player: null, request: null,
+    signal: null, stage: null, message: REDACTED_UNKNOWN_MESSAGE,
   };
 }
 
 function parseLine(raw: string, line: number): ImportedLogEntry {
-  const header = /^\[([^\]]+)\]\s+\[(TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\]\s*(.*)$/u.exec(raw);
-  if (header === null) return emptyEntry(line, raw, raw.startsWith('[') ? 'malformed-prefix' : 'unknown');
+  const header = /^\[([^\]]+)\]\s+\[(TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\]:?\s*(.*)$/u.exec(raw);
+  if (header === null) return emptyEntry(line, raw.startsWith('[') ? 'malformed-prefix' : 'unknown');
   const timestamp = header[1]!;
-  if (!/^\d{4}-\d{2}-\d{2}T/u.test(timestamp) || !Number.isFinite(Date.parse(timestamp))) {
-    return emptyEntry(line, raw, 'malformed-prefix');
+  if (parseLogTimestamp(timestamp) === null) {
+    return emptyEntry(line, 'malformed-prefix');
   }
   let remainder = header[3]!;
+  let officialChannel = '';
+  const channel = /^\[(Standalone|Client|Server)\]\s*/u.exec(remainder);
+  if (channel !== null) {
+    officialChannel = `[${channel[1]}] `;
+    remainder = remainder.slice(channel[0].length);
+  }
   const metadata: Record<'player' | 'request' | 'signal' | 'stage', string | null> = {
     player: null, request: null, signal: null, stage: null,
   };
@@ -84,11 +122,10 @@ function parseLine(raw: string, line: number): ImportedLogEntry {
   return {
     line,
     kind: 'structured',
-    raw,
     timestamp,
     level: header[2] as ImportedLogLevel,
     ...metadata,
-    message: remainder,
+    message: safeMessage(`${officialChannel}${remainder}`),
   };
 }
 
@@ -102,7 +139,7 @@ export function parseImportedLog(bytes: Uint8Array, options: LogParseOptions = {
   const lines = text.endsWith('\n') ? text.slice(0, -1).split('\n') : text.split('\n');
   const entries = lines.map((raw, index) => parseLine(raw, index + 1)).filter((entry) => {
     if (entry.timestamp === null) return from === null && to === null;
-    const time = Date.parse(entry.timestamp);
+    const time = parseLogTimestamp(entry.timestamp)!;
     return (from === null || time >= from) && (to === null || time <= to);
   });
   return { schemaVersion: 1, sourceHash: sha256Hex(bytes), evidence: 'STATIC_LOCAL', entries };
