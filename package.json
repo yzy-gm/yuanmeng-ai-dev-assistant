@@ -2,7 +2,7 @@
   "name": "yuanmeng-ai-dev-assistant",
   "displayName": "元梦 AI 开发助手",
   "description": "由不见星光开发，为《元梦之星》创作者提供本地 UI、场景、ID、Lua、API 审查与玩法模拟的开源 VS Code 伴随工具。",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "publisher": "bujianxingguang",
   "author": "不见星光",
