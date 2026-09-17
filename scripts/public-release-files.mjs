@@ -5,7 +5,7 @@ const ROOT_FILES = ['.gitignore', '.vscodeignore', 'AGENTS.md', 'README.md', 'CH
   'LICENSE', 'NOTICE.md', 'THIRD_PARTY_NOTICES.md', 'package.json', 'package-lock.json',
   'package.nls.json', 'package.nls.en.json', 'esbuild.mjs', 'eslint.config.mjs',
   'tsconfig.json', 'tsconfig.cli.json', 'tsconfig.extension.json', 'vitest.config.ts'];
-const PUBLIC_DOCS = ['docs/mcp.md', 'docs/editor-acceptance-checklist.md', 'docs/public-release.md'];
+const PUBLIC_DOCS = ['docs/mcp.md', 'docs/usage-guide.md', 'docs/editor-acceptance-checklist.md', 'docs/public-release.md'];
 
 export async function publicFiles(root) {
   const files = [...ROOT_FILES, ...PUBLIC_DOCS];
