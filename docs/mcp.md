@@ -1,11 +1,11 @@
 # 本机 MCP 手册
 
-版本 `0.6.0`，服务只使用本机 stdio。它不发布到公共 MCP Gallery/GitHub registry，不要求 `.vscode/mcp.json`，也不开放网络端口。
+版本 `0.6.1`，服务只使用本机 stdio。它不发布到公共 MCP Gallery/GitHub registry，不要求 `.vscode/mcp.json`，也不开放网络端口。
 
-## 工具（41）
+## 工具（42）
 
 - 工程/上下文/UI：`yuanmeng_project_status`、`yuanmeng_task_context`、`yuanmeng_set_map_display_name`、`yuanmeng_ui_refresh`、`yuanmeng_ui_find`、`yuanmeng_ui_resolve`、`yuanmeng_ui_inspect_screen_point`、`yuanmeng_ui_runtime_widgets`、`yuanmeng_ui_screen_snapshot`、`yuanmeng_ui_tree_screen_snapshot`、`yuanmeng_ui_layout_audit`、`yuanmeng_ui_diff`。
-- ID/Lua/知识：`yuanmeng_ids_list`、`yuanmeng_where_used`、`yuanmeng_api_search`、`yuanmeng_project_audit`。
+- ID/Lua/知识：`yuanmeng_ids_list`、`yuanmeng_where_used`、`yuanmeng_api_search`、`yuanmeng_project_audit`、`yuanmeng_official_audit`。
 - 场景/探针：`yuanmeng_scene_status`、`yuanmeng_scene_bind`、`yuanmeng_scene_refresh`、`yuanmeng_scene_find`、`yuanmeng_scene_tree`、`yuanmeng_scene_fields`、`yuanmeng_group_members`、`yuanmeng_scene_diff`、`yuanmeng_scene_near`、`yuanmeng_scene_audit`、`yuanmeng_scene_types`、`yuanmeng_scene_capability_describe`、`yuanmeng_runtime_probe`、`yuanmeng_scene_geometry`、`yuanmeng_scene_plan`、`yuanmeng_scene_journal`、`yuanmeng_property_locate`。
 - 玩法/反馈：`yuanmeng_gameplay_review`、`yuanmeng_gameplay_test`、`yuanmeng_gameplay_status`、`yuanmeng_task_completion_check`、`yuanmeng_feedback_add`、`yuanmeng_feedback_list`、`yuanmeng_feedback_resolve`。
 - 自动交付：`yuanmeng_build_and_send_code`。顺序固定为 Save All、确认 Lua 已保存、刷新并确认 UI 诊断 fresh/零错误、运行与 `yuanmeng_project_audit` 相同的当前工程全量 Lua/UI/ID/API 审计、官方 `dreamhelper.scriptGen`、最长 60–70 秒轮询并等待稳定产物。两条静态门互不替代；`INVALID_LUA_SYNTAX`、`LUA_LIMIT_EXCEEDED` 或审计错误必须返回 `CHECK_FAILED`，保留具体阻断文件，并且不得调用官方命令。插件不会擅自排除 `*_backup.lua`。主产物为 `dist/code_YYYY-MM-DD-HH-MM-SS.zip`，兼容 `play.lua/play.min.lua`；旧文件删除不算成功，分段写入必须连续稳定采样。桥接 JSON 原子替换遇到短暂 `EPERM/EBUSY` 会有界重试，只清理本插件桥目录内、符合严格命名且已过期的临时文件。`play.json` 只访问并返回白名单 `type/pack/time` 与产物关联结果；密码字段不会被复制到返回对象、日志或输出。命令/fixture 返回本身最高只属于 `EXTENSION_HOST`，没有稳定新产物则返回 `EVIDENCE_INSUFFICIENT`。不得解释为地图保存、发布或游戏内共享成功。
